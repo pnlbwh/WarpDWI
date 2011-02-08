@@ -1,0 +1,10 @@
+*.swp
+*.swo
+*.nrrd
+*.nii.gz
+Makefile
+CMakeCache.txt
+CMakeFiles
+*.so
+*.cmake
+*CLP.h

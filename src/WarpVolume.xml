@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<executable>
+  <category></category>
+  <title>Warp Volume</title>
+  <description>
+</description>
+  <version>0.1.0.$Revision: 8595 $(alpha)</version>
+  <documentation-url>http://www.slicer.org/slicerWiki/index.php/Modules:</documentation-url>
+  <license></license>
+  <contributor></contributor>
+<acknowledgements>
+</acknowledgements>
+
+<parameters>
+    <label>IO</label>
+    <description>Input/output parameters</description>
+    
+    <file multiple="false" fileExtensions="nii.gz">
+      <name>inputVolume</name>
+      <longflag>inputVolume</longflag>
+      <description>Input volume</description>
+      <label>Volume to warp</label>      
+      <channel>input</channel>
+    </file>
+
+    <directory multiple="false">
+      <name>resultsDirectory</name>
+      <longflag>resultsDirectory</longflag>
+      <description>Directory where warped volume will be saved</description>
+      <label>Results Directory</label>      
+      <channel>input</channel>
+    </directory>    
+   
+    <string>
+      <name>warp</name>
+      <label>Warp</label>
+      <longflag>warp</longflag>
+      <description>Warp (Deformation) Field</description>
+    </string>
+</parameters>
+
+</executable>
