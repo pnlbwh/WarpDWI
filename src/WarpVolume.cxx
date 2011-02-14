@@ -152,6 +152,41 @@ std::string WarpedImageName(std::string outputDir, std::string filename)
 //}
 
 
+template< class PixelType>
+void GetSHBasis(vtkSmartPointer<vtkDoubleArray> &Y, vtkSmartPointer<vtkDoubleArray> &grads, int L)
+{
+  int numcoeff = (L+1)*(L+2)/2;
+  Y->SetNumberOfComponents( numcoeff );
+  /* makespharms(u, L) */
+  typedef neurolib::SphericalHarmonicPolynomial<3> SphericalHarmonicPolynomialType;
+  SphericalHarmonicPolynomialType *sphm = new SphericalHarmonicPolynomialType();
+  int flag = 1;
+  for (int j = 0; j < 2; j++)
+  {
+    for (int i = 8; i < grads->GetNumberOfTuples(); i ++)
+    {
+      double theta = acos(flag*grads->GetComponent(i,2));
+      double varphi = atan2(flag*grads->GetComponent(i,1), flag*grads->GetComponent(i,0) );
+      if (varphi < 0) varphi = varphi + 2*M_PI;
+      double coeff[numcoeff];  
+      int coeff_i = 0;
+      coeff[coeff_i] = sphm->SH(0,0,theta,varphi);
+      coeff_i++;
+      //std::cout << sphm->SH(0,0,theta,varphi) << " ";
+      for (int l = 2; l <=L; l+=2)
+      {
+        for (int m = l; abs(m) <= l; m--)
+        {
+          //std::cout << sphm->SH(l,m,theta,varphi) << " ";
+          coeff[coeff_i] = sphm->SH(l,m,theta,varphi);
+          coeff_i++;
+        }
+      }
+      Y->InsertNextTuple(coeff);
+    }
+    flag = -1;
+  }
+}
 
 template< class PixelType > 
 int Warp( parameters &args )
@@ -189,44 +224,13 @@ int Warp( parameters &args )
     }
 
   /* Compute Spherical Harmonic coefficients */
-  int L = 8;
-  int numcoeff = (L+1)*(L+2)/2;
   vtkSmartPointer<vtkDoubleArray> Y = vtkDoubleArray::New();
-  //Y->SetNumberOfTuples(2*(grads->GetNumberOfComponents()-8));
-  Y->SetNumberOfComponents( numcoeff );
-  /* makespharms(u, L) */
-  typedef neurolib::SphericalHarmonicPolynomial<Dimension> SphericalHarmonicPolynomialType;
-  SphericalHarmonicPolynomialType *sphm = new SphericalHarmonicPolynomialType();
-  int flag = 1;
-  for (int j = 0; j < 2; j++)
-  {
-    for (int i = 8; i < grads->GetNumberOfTuples(); i ++)
-    {
-      double theta = acos(flag*grads->GetComponent(i,2));
-      double varphi = atan2(flag*grads->GetComponent(i,1), flag*grads->GetComponent(i,0) );
-      if (varphi < 0) varphi = varphi + 2*M_PI;
-      double coeff[numcoeff];  
-      int coeff_i = 0;
-      coeff[coeff_i] = sphm->SH(0,0,theta,varphi);
-      coeff_i++;
-      //std::cout << sphm->SH(0,0,theta,varphi) << " ";
-      for (int l = 2; l <=L; l+=2)
-      {
-        for (int m = l; abs(m) <= l; m--)
-        {
-          //std::cout << sphm->SH(l,m,theta,varphi) << " ";
-          coeff[coeff_i] = sphm->SH(l,m,theta,varphi);
-          coeff_i++;
-        }
-      }
-      Y->InsertNextTuple(coeff);
-    }
-    flag = -1;
-  }
+  GetSHBasis<PixelType>(Y, grads, 8);
+  
 
   for (int i = 0; i < Y->GetNumberOfTuples(); i ++)
   {
-      std::cout << Y->GetComponent(i, 1) << std::endl;
+      std::cout << Y->GetComponent(i, 44) << std::endl;
   }
   return 1;
 
