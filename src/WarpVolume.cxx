@@ -11,6 +11,22 @@
 #include "itkImageFileReader.h"
 #include "itkImageFileWriter.h"
 
+#include "itkMultivariateLegendrePolynomial.h"
+#include "SphericalHarmonicPolynomial.h"
+#include <math.h>
+
+#include "itkPluginFilterWatcher.h"
+#include "itkPluginUtilities.h"
+#include "vtkSmartPointer.h"
+#include "vtkTeemEstimateDiffusionTensor.h"
+#include "vtkMatrix4x4.h"
+#include "vtkNRRDReader.h"
+#include "vtkNRRDWriter.h"
+#include "vtkMRMLNRRDStorageNode.h"
+#include "vtkMath.h"
+#include "vtkImageData.h"
+#include "vtkDoubleArray.h"
+
 
 struct parameters
 {
@@ -121,19 +137,19 @@ std::string WarpedImageName(std::string outputDir, std::string filename)
   return result.str();
 }
 
-void GetImageType( std::string fileName ,
-                   itk::ImageIOBase::IOPixelType &pixelType ,
-                   itk::ImageIOBase::IOComponentType &componentType
-                 )
-{
-   typedef itk::Image< unsigned char , 3 > ImageType;
-   itk::ImageFileReader< ImageType >::Pointer imageReader;
-   imageReader = itk::ImageFileReader< ImageType >::New();
-   imageReader->SetFileName( fileName.c_str() );
-   imageReader->UpdateOutputInformation();
-   pixelType = imageReader->GetImageIO()->GetPixelType();
-   componentType = imageReader->GetImageIO()->GetComponentType();
-}
+//void GetImageType( std::string fileName ,
+                   //itk::ImageIOBase::IOPixelType &pixelType ,
+                   //itk::ImageIOBase::IOComponentType &componentType
+                 //)
+//{
+   //typedef itk::Image< unsigned char , 3 > ImageType;
+   //itk::ImageFileReader< ImageType >::Pointer imageReader;
+   //imageReader = itk::ImageFileReader< ImageType >::New();
+   //imageReader->SetFileName( fileName.c_str() );
+   //imageReader->UpdateOutputInformation();
+   //pixelType = imageReader->GetImageIO()->GetPixelType();
+   //componentType = imageReader->GetImageIO()->GetComponentType();
+//}
 
 
 
@@ -159,11 +175,65 @@ int Warp( parameters &args )
   fieldReader->Update();
 
   /* read input volume */
+  vtkSmartPointer<vtkNRRDReader> reader = vtkNRRDReader::New();
+  reader->SetFileName(args.inputVolume.c_str());
+  reader->Update();
+  vtkSmartPointer<vtkDoubleArray> bValues = vtkDoubleArray::New();
+  vtkSmartPointer<vtkDoubleArray> grads = vtkDoubleArray::New();
+  vtkSmartPointer<vtkMRMLNRRDStorageNode> helper = vtkMRMLNRRDStorageNode::New();
+  if ( !helper->ParseDiffusionInformation(reader,grads,bValues) )
+    {
+    //std::cerr << argv[0] << ": Error parsing Diffusion information" << std::endl;
+    std::cerr << ": Error parsing Diffusion information" << std::endl;
+    return EXIT_FAILURE;
+    }
+
+  /* Compute Spherical Harmonic coefficients */
+  int L = 8;
+  int numcoeff = (L+1)*(L+2)/2;
+  vtkSmartPointer<vtkDoubleArray> Y = vtkDoubleArray::New();
+  //Y->SetNumberOfTuples(2*(grads->GetNumberOfComponents()-8));
+  Y->SetNumberOfComponents( numcoeff );
+  /* makespharms(u, L) */
+  typedef neurolib::SphericalHarmonicPolynomial<Dimension> SphericalHarmonicPolynomialType;
+  SphericalHarmonicPolynomialType *sphm = new SphericalHarmonicPolynomialType();
+  int flag = 1;
+  for (int j = 0; j < 2; j++)
+  {
+    for (int i = 8; i < grads->GetNumberOfTuples(); i ++)
+    {
+      double theta = acos(flag*grads->GetComponent(i,2));
+      double varphi = atan2(flag*grads->GetComponent(i,1), flag*grads->GetComponent(i,0) );
+      if (varphi < 0) varphi = varphi + 2*M_PI;
+      double coeff[numcoeff];  
+      int coeff_i = 0;
+      coeff[coeff_i] = sphm->SH(0,0,theta,varphi);
+      coeff_i++;
+      //std::cout << sphm->SH(0,0,theta,varphi) << " ";
+      for (int l = 2; l <=L; l+=2)
+      {
+        for (int m = l; abs(m) <= l; m--)
+        {
+          //std::cout << sphm->SH(l,m,theta,varphi) << " ";
+          coeff[coeff_i] = sphm->SH(l,m,theta,varphi);
+          coeff_i++;
+        }
+      }
+      Y->InsertNextTuple(coeff);
+    }
+    flag = -1;
+  }
+
+  for (int i = 0; i < Y->GetNumberOfTuples(); i ++)
+  {
+      std::cout << Y->GetComponent(i, 1) << std::endl;
+  }
+  return 1;
+
+  /* separate into a vector */
   typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
   imageReader->SetFileName( args.inputVolume.c_str() );
   imageReader->Update();
-
-  /* separate into a vector */
   std::vector< typename ImageType::Pointer > vectorOfImage;
   SeparateImages< PixelType >( imageReader->GetOutput() , vectorOfImage ) ;
 

@@ -16,6 +16,7 @@ slicer3_set_default_install_prefix_for_external_projects()
 
 link_directories(${ModuleDescriptionParser_BINARY_DIR})
 include_directories( ${SlicerBaseCLI_BINARY_DIR} ${SlicerBaseCLI_SOURCE_DIR} )
+#include_directories( . )
 
 #####################
 
@@ -35,12 +36,20 @@ target_link_libraries (${CLP}
   ITKIO
   ITKCommon
   ITKStatistics
+  MRML
+  vtkTeem
   )
 
-add_library(${CLP}Lib SHARED ${${CLP}_SOURCE})
-set_target_properties (${CLP}Lib PROPERTIES COMPILE_FLAGS "-Dmain=ModuleEntryPoint")
+#add_library(${CLP}Lib SHARED ${${CLP}_SOURCE})
+#set_target_properties (${CLP}Lib PROPERTIES COMPILE_FLAGS "-Dmain=ModuleEntryPoint")
 #slicer3_set_plugins_output_path(${CLP}Lib)
-target_link_libraries (${CLP}Lib ITKIO ITKCommon ITKStatistics)
+#target_link_libraries (${CLP}Lib 
+  #ITKIO 
+  #ITKCommon 
+  #ITKStatistics 
+  #MRML 
+  #vtkTeem
+  #)
 
 
 #if (Slicer3_SOURCE_DIR)
