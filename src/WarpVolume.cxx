@@ -152,6 +152,53 @@ std::string WarpedImageName(std::string outputDir, std::string filename)
 //}
 
 
+//template< class PixelType>
+//void GetSHBasis2(vnl_matrix<double> &Y, vtkSmartPointer<vtkDoubleArray> &grads, int L)
+template< class PixelType>
+vnl_matrix<double> GetSHBasis2(vtkSmartPointer<vtkDoubleArray> &grads, int L)
+{
+  int numcoeff = (L+1)*(L+2)/2;
+  typedef vnl_matrix<double> MatrixType;
+  MatrixType Y(2*(grads->GetNumberOfTuples()-8), numcoeff);
+  std::cout << "Y is " << Y.rows() << " by " << Y.columns() << std::endl;
+  //Y->SetNumberOfComponents( numcoeff );
+  /* makespharms(u, L) */
+  typedef neurolib::SphericalHarmonicPolynomial<3> SphericalHarmonicPolynomialType;
+  SphericalHarmonicPolynomialType *sphm = new SphericalHarmonicPolynomialType();
+  int flag = 1;
+  int offset = -8;
+  for (int j = 0; j < 2; j++)
+  {
+    //for (int i = 8; i < grads->GetNumberOfTuples(); i ++)
+    for (int i = 8; i < grads->GetNumberOfTuples(); i++)
+    {
+      double theta = acos(flag*grads->GetComponent(i,2));
+      double varphi = atan2(flag*grads->GetComponent(i,1), flag*grads->GetComponent(i,0) );
+      if (varphi < 0) varphi = varphi + 2*M_PI;
+      //double coeff[numcoeff];  
+      int coeff_i = 0;
+      //coeff[coeff_i] = sphm->SH(0,0,theta,varphi);
+      Y(i+offset,coeff_i) = sphm->SH(0,0,theta,varphi);
+      coeff_i++;
+      //std::cout << sphm->SH(0,0,theta,varphi) << " ";
+      for (int l = 2; l <=L; l+=2)
+      {
+        for (int m = l; abs(m) <= l; m--)
+        {
+          //std::cout << sphm->SH(l,m,theta,varphi) << " ";
+          //coeff[coeff_i] = sphm->SH(l,m,theta,varphi);
+          Y(i+offset,coeff_i) = sphm->SH(l,m,theta,varphi);
+          coeff_i++;
+        }
+      }
+      //Y->InsertNextTuple(coeff);
+    }
+    flag = -1;
+    offset = offset + grads->GetNumberOfTuples() - 8;
+  }
+  return Y;
+}
+
 template< class PixelType>
 void GetSHBasis(vtkSmartPointer<vtkDoubleArray> &Y, vtkSmartPointer<vtkDoubleArray> &grads, int L)
 {
@@ -203,7 +250,7 @@ int Warp( parameters &args )
   typedef itk::ImageFileWriter< VectorImageType >   WriterType;
   //typedef itk::ImageFileWriter< ImageType >   WriterType;
 
-  itk::MetaDataDictionary dico;
+  //itk::MetaDataDictionary dico;
 
   DeformationReaderType::Pointer   fieldReader = DeformationReaderType::New();
   fieldReader->SetFileName( args.warp.c_str() );
@@ -224,14 +271,24 @@ int Warp( parameters &args )
     }
 
   /* Compute Spherical Harmonic coefficients */
-  vtkSmartPointer<vtkDoubleArray> Y = vtkDoubleArray::New();
-  GetSHBasis<PixelType>(Y, grads, 8);
-  
-
-  for (int i = 0; i < Y->GetNumberOfTuples(); i ++)
+  int L = 8;
+  int numcoeff = (L+1)*(L+2)/2;
+  typedef vnl_matrix<double> MatrixType;
+  //MatrixType Y2(grads->GetNumberOfTuples()-8,numcoeff);
+  MatrixType Y2 = GetSHBasis2<PixelType>(grads, L);
+  std::cout << "Y is " << Y2.rows() << " by " << Y2.columns() << std::endl;
+  for (int i = 0; i < Y2.rows(); i ++)
   {
-      std::cout << Y->GetComponent(i, 44) << std::endl;
+      std::cout << Y2(i, 44) << std::endl;
   }
+      std::cout  << std::endl;
+  
+  //vtkSmartPointer<vtkDoubleArray> Y = vtkDoubleArray::New();
+  //GetSHBasis<PixelType>(Y, grads, L);
+  //for (int i = 0; i < Y->GetNumberOfTuples(); i ++)
+  //{
+      //std::cout << Y->GetComponent(i, 44) << std::endl;
+  //}
   return 1;
 
   /* separate into a vector */
