@@ -275,7 +275,7 @@ int Warp( parameters &args )
   //MatrixType Y2(grads->GetNumberOfTuples()-8,numcoeff);
   MatrixType Y2 = GetSHBasis2<PixelType>(grads, L);
   std::cout << "Y is " << Y2.rows() << " by " << Y2.columns() << std::endl;
-  for (int i = 0; i < Y2.rows(); i ++)
+  for (unsigned int i = 0; i < Y2.rows(); i ++)
   {
       std::cout << Y2(i, 44) << std::endl;
   }
@@ -294,6 +294,25 @@ int Warp( parameters &args )
   imageReader->Update();
 
 
+  /* compute B */
+  vnl_vector<PixelType> r(45);
+  vnl_vector<PixelType> a(1);
+  a(0) = 1;
+  int end = 0;
+  for (int l = 0; l <= L; l+=2)
+  {
+    a.set_size(2*l+1);
+    a.fill(l);
+    std::cout << "a is " << a << std::endl;
+    r.update(a, end);
+    end += a.size();
+  }
+  vnl_vector<PixelType> B = element_product(r, r+1);
+  B = element_product(B,B);
+  std::cout << B << std::endl;
+  return 1;
+
+  /* Compute SHestim */
   typename itk::ImageRegionIterator< VectorImageType > in( imageReader->GetOutput(),  imageReader->GetOutput()->GetLargestPossibleRegion() );
   for( in.GoToBegin(); !in.IsAtEnd(); ++in )
   {
