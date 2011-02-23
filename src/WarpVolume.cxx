@@ -58,8 +58,7 @@ int SeparateImages( const typename itk::VectorImage< PixelType , 3 >
    direction=imagePile->GetDirection();
    origin=imagePile->GetOrigin();
    spacing=imagePile->GetSpacing();
-   typename itk::ImageRegionIterator< VectorImageType > in( imagePile ,
-                                                            imagePile->GetLargestPossibleRegion() );
+   typename itk::ImageRegionIterator< VectorImageType > in( imagePile , imagePile->GetLargestPossibleRegion() );
    typedef typename itk::ImageRegionIterator< ImageType > IteratorImageType;
    std::vector< IteratorImageType > out;
    for( unsigned int i = 0; i < imagePile->GetVectorLength(); i++ )
@@ -155,10 +154,10 @@ std::string WarpedImageName(std::string outputDir, std::string filename)
 //template< class PixelType>
 //void GetSHBasis2(vnl_matrix<double> &Y, vtkSmartPointer<vtkDoubleArray> &grads, int L)
 template< class PixelType>
-vnl_matrix<double> GetSHBasis2(vtkSmartPointer<vtkDoubleArray> &grads, int L)
+vnl_matrix<PixelType> GetSHBasis2(vtkSmartPointer<vtkDoubleArray> &grads, int L)
 {
   int numcoeff = (L+1)*(L+2)/2;
-  typedef vnl_matrix<double> MatrixType;
+  typedef vnl_matrix<PixelType> MatrixType;
   MatrixType Y(2*(grads->GetNumberOfTuples()-8), numcoeff);
   std::cout << "Y is " << Y.rows() << " by " << Y.columns() << std::endl;
   //Y->SetNumberOfComponents( numcoeff );
@@ -272,8 +271,7 @@ int Warp( parameters &args )
 
   /* Compute Spherical Harmonic coefficients */
   int L = 8;
-  int numcoeff = (L+1)*(L+2)/2;
-  typedef vnl_matrix<double> MatrixType;
+  typedef vnl_matrix<PixelType> MatrixType;
   //MatrixType Y2(grads->GetNumberOfTuples()-8,numcoeff);
   MatrixType Y2 = GetSHBasis2<PixelType>(grads, L);
   std::cout << "Y is " << Y2.rows() << " by " << Y2.columns() << std::endl;
@@ -281,7 +279,7 @@ int Warp( parameters &args )
   {
       std::cout << Y2(i, 44) << std::endl;
   }
-      std::cout  << std::endl;
+  std::cout  << std::endl;
   
   //vtkSmartPointer<vtkDoubleArray> Y = vtkDoubleArray::New();
   //GetSHBasis<PixelType>(Y, grads, L);
@@ -289,20 +287,39 @@ int Warp( parameters &args )
   //{
       //std::cout << Y->GetComponent(i, 44) << std::endl;
   //}
-  return 1;
 
   /* separate into a vector */
   typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
   imageReader->SetFileName( args.inputVolume.c_str() );
   imageReader->Update();
-  std::vector< typename ImageType::Pointer > vectorOfImage;
-  SeparateImages< PixelType >( imageReader->GetOutput() , vectorOfImage ) ;
+
+
+  typename itk::ImageRegionIterator< VectorImageType > in( imageReader->GetOutput(),  imageReader->GetOutput()->GetLargestPossibleRegion() );
+  for( in.GoToBegin(); !in.IsAtEnd(); ++in )
+  {
+    itk::VariableLengthVector< PixelType > data = in.Get();
+    vnl_vector<PixelType> S(2*data.GetNumberOfElements()-16);
+    for (int i = 8; i < data.GetNumberOfElements(); i++)
+    {
+      S(i-8) = data.GetElement(i);
+      S(i-8+data.GetNumberOfElements()-8) = data.GetElement(i);
+    }
+    Y2 = Y2.transpose();
+    std::cout << "Y transpose is " << Y2.rows() << " by " << Y2.columns() << std::endl;
+    std::cout << "S size is " << S.size() << std::endl;
+    std::cout << Y2 * S << std::endl;
+    return 1;
+  }
+
+
 
   /* warp the image(s) */
   typename WarperType::Pointer   warper = WarperType::New();
   warper->SetDeformationField( fieldReader->GetOutput() );
 
   std::vector< typename ImageType::Pointer > vectorOutputImage ;
+  std::vector< typename ImageType::Pointer > vectorOfImage;
+  SeparateImages< PixelType >( imageReader->GetOutput() , vectorOfImage ) ;
 
   for( ::size_t i = 0; i < vectorOfImage.size(); i++ )
   {
