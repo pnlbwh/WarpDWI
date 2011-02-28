@@ -154,10 +154,11 @@ std::string WarpedImageName(std::string outputDir, std::string filename)
 //template< class PixelType>
 //void GetSHBasis2(vnl_matrix<double> &Y, vtkSmartPointer<vtkDoubleArray> &grads, int L)
 template< class PixelType>
-vnl_matrix<PixelType> GetSHBasis2(vtkSmartPointer<vtkDoubleArray> &grads, int L)
+vnl_matrix<double> GetSHBasis2(vtkSmartPointer<vtkDoubleArray> &grads, int L)
 {
   int numcoeff = (L+1)*(L+2)/2;
-  typedef vnl_matrix<PixelType> MatrixType;
+  //typedef vnl_matrix<PixelType> MatrixType;
+  typedef vnl_matrix<double> MatrixType;
   MatrixType Y(2*(grads->GetNumberOfTuples()-8), numcoeff);
   std::cout << "Y is " << Y.rows() << " by " << Y.columns() << std::endl;
   //Y->SetNumberOfComponents( numcoeff );
@@ -194,6 +195,49 @@ vnl_matrix<PixelType> GetSHBasis2(vtkSmartPointer<vtkDoubleArray> &grads, int L)
     }
     flag = -1;
     offset = offset + grads->GetNumberOfTuples() - 8;
+  }
+  return Y;
+}
+
+template< class PixelType>
+vnl_matrix<double> GetSHBasis3(vnl_matrix<double> gradients, int L)
+{
+  int numcoeff = (L+1)*(L+2)/2;
+  //typedef vnl_matrix<PixelType> MatrixType;
+  typedef vnl_matrix<double> MatrixType;
+  MatrixType Y(gradients.rows()*2, numcoeff);
+
+  /* makespharms(u, L) */
+  typedef neurolib::SphericalHarmonicPolynomial<3> SphericalHarmonicPolynomialType;
+  SphericalHarmonicPolynomialType *sphm = new SphericalHarmonicPolynomialType();
+  int flag = 1;
+  int offset = 0;
+  for (int j = 0; j < 2; j++)
+  {
+    for (int i = 0; i < gradients.rows(); i++)
+    {
+      double theta = acos( flag*gradients(i,2) );
+      double varphi = atan2( flag*gradients(i,1), flag*gradients(i,0) );
+      if (varphi < 0) varphi = varphi + 2*M_PI;
+      //double coeff[numcoeff];  
+      int coeff_i = 0;
+      Y(i+offset,coeff_i) = sphm->SH(0,0,theta,varphi);
+      coeff_i++;
+      //std::cout << sphm->SH(0,0,theta,varphi) << " ";
+      for (int l = 2; l <=L; l+=2)
+      {
+        for (int m = l; abs(m) <= l; m--)
+        {
+          //std::cout << sphm->SH(l,m,theta,varphi) << " ";
+          //coeff[coeff_i] = sphm->SH(l,m,theta,varphi);
+          Y(i+offset,coeff_i) = sphm->SH(l,m,theta,varphi);
+          coeff_i++;
+        }
+      }
+      //Y->InsertNextTuple(coeff);
+    }
+    flag = -1;
+    offset = gradients.rows();
   }
   return Y;
 }
@@ -269,18 +313,39 @@ int Warp( parameters &args )
     return EXIT_FAILURE;
     }
 
+
   /* Compute Spherical Harmonic coefficients */
+  typedef vnl_matrix<double> MatrixType;
   int L = 8;
-  typedef vnl_matrix<PixelType> MatrixType;
-  //MatrixType Y2(grads->GetNumberOfTuples()-8,numcoeff);
-  MatrixType Y2 = GetSHBasis2<PixelType>(grads, L);
-  std::cout << "Y is " << Y2.rows() << " by " << Y2.columns() << std::endl;
-  for (unsigned int i = 0; i < Y2.rows(); i ++)
+
+  /* Put gradients into a vnl matrix */
+  MatrixType gradients(grads->GetNumberOfTuples()-8, 3);
+  for (int i = 8; i < grads->GetNumberOfTuples(); i++)
   {
-      std::cout << Y2(i, 44) << std::endl;
+    for (int j = 0; j < 3; j++)
+    {
+      gradients(i-8,j) = grads->GetComponent(i,j);
+    }
   }
-  std::cout  << std::endl;
-  
+
+  /* Load Rotation */
+  MatrixType R(3,3);
+  R(0,0) = 0.999450003479549;   
+  R(0,1) = 0.017033058532942;   
+  R(0,2) = 0.028452863858364;
+  R(1,0) = -0.016471001243502;
+  R(1,1) = 0.999666831145781;
+  R(1,2) = -0.019872916871657;
+  R(2,0) = -0.028781880806608;
+  R(2,1) = 0.019393339680534;
+  R(2,2) = 0.999397569395318;
+
+
+  //MatrixType Y2(grads->GetNumberOfTuples()-8,numcoeff);
+  //MatrixType Y2 = GetSHBasis2<PixelType>(grads, L);
+  std::cout << gradients * R << std::endl;
+  MatrixType Y2 = GetSHBasis3<double>(gradients * R, L);
+    
   //vtkSmartPointer<vtkDoubleArray> Y = vtkDoubleArray::New();
   //GetSHBasis<PixelType>(Y, grads, L);
   //for (int i = 0; i < Y->GetNumberOfTuples(); i ++)
@@ -295,39 +360,59 @@ int Warp( parameters &args )
 
 
   /* compute B */
-  vnl_vector<PixelType> r(45);
-  vnl_vector<PixelType> a(1);
+  vnl_vector<double> r(45);
+  vnl_vector<double> a(1);
   a(0) = 1;
   int end = 0;
   for (int l = 0; l <= L; l+=2)
   {
     a.set_size(2*l+1);
     a.fill(l);
-    std::cout << "a is " << a << std::endl;
-    r.update(a, end);
-    end += a.size();
-  }
-  vnl_vector<PixelType> B = element_product(r, r+1);
+    r.update(a, end); end += a.size(); }
+  vnl_vector<double> B = element_product(r, r+1);
   B = element_product(B,B);
-  std::cout << B << std::endl;
-  return 1;
+
+
 
   /* Compute SHestim */
   typename itk::ImageRegionIterator< VectorImageType > in( imageReader->GetOutput(),  imageReader->GetOutput()->GetLargestPossibleRegion() );
+  int isNotZero = 0;
   for( in.GoToBegin(); !in.IsAtEnd(); ++in )
   {
-    itk::VariableLengthVector< PixelType > data = in.Get();
-    vnl_vector<PixelType> S(2*data.GetNumberOfElements()-16);
+    //itk::VariableLengthVector< PixelType > data = in.Get();
+    itk::VariableLengthVector< double > data = in.Get();
+    vnl_vector<double> S(2*data.GetNumberOfElements()-16);
     for (int i = 8; i < data.GetNumberOfElements(); i++)
     {
       S(i-8) = data.GetElement(i);
       S(i-8+data.GetNumberOfElements()-8) = data.GetElement(i);
+      if ( S(i-8) > 0.0 ) isNotZero = 1;
     }
-    Y2 = Y2.transpose();
-    std::cout << "Y transpose is " << Y2.rows() << " by " << Y2.columns() << std::endl;
-    std::cout << "S size is " << S.size() << std::endl;
-    std::cout << Y2 * S << std::endl;
-    return 1;
+
+    if (isNotZero)
+    {
+      std::cout << "Y is " << Y2.rows() << " by " << Y2.columns() << std::endl;
+      for (unsigned int i = 0; i < Y2.rows(); i ++)
+      {
+        std::cout << Y2(i, 44) << std::endl;
+      }
+      std::cout  << std::endl;
+
+      MatrixType Y2_t = Y2.transpose();
+      std::cout << "S is " << S << std::endl;
+      vnl_diag_matrix<double> diag =  vnl_diag_matrix<double>(0.003 * B);
+      MatrixType denominator = Y2_t * Y2;
+      //std::cout << "Y2_t * Y2 is " <<  denominator << std::endl;
+      denominator = denominator +  diag;
+      //std::cout << "Y2_t * Y2 + 0.003 * diag(B) is " <<  denominator << std::endl;
+      denominator = vnl_matrix_inverse<double>( denominator );
+      std::cout << "inverse denominator is " << std::endl <<  denominator << std::endl;
+      //std::cout << "denominator is " << denominator.rows() << " by " << denominator.columns() << std::endl;
+      vnl_vector<double> numerator =  Y2_t * S;
+      std::cout << "Y2_t * S is " <<  std::endl << Y2_t * S << std::endl;
+      std::cout << "result is " <<  denominator * Y2_t * S << std::endl;
+      return 1;
+    }
   }
 
 
