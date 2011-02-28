@@ -27,6 +27,8 @@
 #include "vtkImageData.h"
 #include "vtkDoubleArray.h"
 
+#include "mat.h"
+
 
 struct parameters
 {
@@ -313,6 +315,21 @@ int Warp( parameters &args )
     return EXIT_FAILURE;
     }
 
+  /* read in rotation matrix */
+  MATFile *mfile = matOpen("/spl_unsupported/pnlfs/reckbo/projects/CreateDWIAtlas/tests/input/01019-Rgd-fa-Rotation.mat", "r");
+  mxArray *rotations = matGetVariable(mfile, "R");
+  mwSize num_new_dims = 3;
+  mwSize new_dims[] = {3, 3, 1762560};
+  mxSetDimensions(rotations, new_dims, num_new_dims);
+  double *rot = mxGetPr(rotations);
+  
+  mwIndex subs[] = {2, 0, 0};
+  mwIndex index = mxCalcSingleSubscript(rotations, num_new_dims, subs);
+  //printf("rotation element: %f", rot[index]);
+  std::cout << "rotation element: " << rot[index] << std::endl;
+
+  //printf("index: %i", index);
+
 
   /* Compute Spherical Harmonic coefficients */
   typedef vnl_matrix<double> MatrixType;
@@ -343,7 +360,7 @@ int Warp( parameters &args )
 
   //MatrixType Y2(grads->GetNumberOfTuples()-8,numcoeff);
   //MatrixType Y2 = GetSHBasis2<PixelType>(grads, L);
-  std::cout << gradients * R << std::endl;
+  //std::cout << gradients * R << std::endl;
   MatrixType Y2 = GetSHBasis3<double>(gradients * R, L);
     
   //vtkSmartPointer<vtkDoubleArray> Y = vtkDoubleArray::New();
@@ -406,10 +423,10 @@ int Warp( parameters &args )
       denominator = denominator +  diag;
       //std::cout << "Y2_t * Y2 + 0.003 * diag(B) is " <<  denominator << std::endl;
       denominator = vnl_matrix_inverse<double>( denominator );
-      std::cout << "inverse denominator is " << std::endl <<  denominator << std::endl;
+      //std::cout << "inverse denominator is " << std::endl <<  denominator << std::endl;
       //std::cout << "denominator is " << denominator.rows() << " by " << denominator.columns() << std::endl;
       vnl_vector<double> numerator =  Y2_t * S;
-      std::cout << "Y2_t * S is " <<  std::endl << Y2_t * S << std::endl;
+      //std::cout << "Y2_t * S is " <<  std::endl << Y2_t * S << std::endl;
       std::cout << "result is " <<  denominator * Y2_t * S << std::endl;
       return 1;
     }

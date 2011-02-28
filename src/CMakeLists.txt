@@ -14,8 +14,9 @@ slicer3_set_default_install_prefix_for_external_projects()
 #find_package(ITK REQUIRED)
 #include(${ITK_USE_FILE})
 
-link_directories(${ModuleDescriptionParser_BINARY_DIR})
+link_directories(${ModuleDescriptionParser_BINARY_DIR} "/local/os/pkg/matlab-R2010a/bin/glnxa64")
 include_directories( ${SlicerBaseCLI_BINARY_DIR} ${SlicerBaseCLI_SOURCE_DIR} )
+include_directories( "/local/os/pkg/matlab-R2010a/extern/include" )
 #include_directories( . )
 
 #####################
@@ -38,6 +39,7 @@ target_link_libraries (${CLP}
   ITKStatistics
   MRML
   vtkTeem
+  mat
   )
 
 #add_library(${CLP}Lib SHARED ${${CLP}_SOURCE})
