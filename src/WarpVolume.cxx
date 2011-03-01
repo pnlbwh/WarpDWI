@@ -318,20 +318,24 @@ int Warp( parameters &args )
   /* read in rotation matrix */
   MATFile *mfile = matOpen("/spl_unsupported/pnlfs/reckbo/projects/CreateDWIAtlas/tests/input/01019-Rgd-fa-Rotation.mat", "r");
   mxArray *rotations = matGetVariable(mfile, "R");
-  mwSize num_new_dims = 3;
-  mwSize new_dims[] = {3, 3, 1762560};
-  mxSetDimensions(rotations, new_dims, num_new_dims);
+  //mwSize num_new_dims = 3;
+  //mwSize new_dims[] = {3, 3, 1762560};
+  //mxSetDimensions(rotations, new_dims, num_new_dims);
   double *rot = mxGetPr(rotations);
   
-  mwIndex subs[] = {2, 0, 0};
-  mwIndex index = mxCalcSingleSubscript(rotations, num_new_dims, subs);
-  //printf("rotation element: %f", rot[index]);
-  std::cout << "rotation element: " << rot[index] << std::endl;
 
-  //printf("index: %i", index);
+  //R(0,0) = 0.999450003479549;   
+  //R(0,1) = 0.017033058532942;   
+  //R(0,2) = 0.028452863858364;
+  //R(1,0) = -0.016471001243502;
+  //R(1,1) = 0.999666831145781;
+  //R(1,2) = -0.019872916871657;
+  //R(2,0) = -0.028781880806608;
+  //R(2,1) = 0.019393339680534;
+  //R(2,2) = 0.999397569395318;
 
 
-  /* Compute Spherical Harmonic coefficients */
+
   typedef vnl_matrix<double> MatrixType;
   int L = 8;
 
@@ -345,23 +349,11 @@ int Warp( parameters &args )
     }
   }
 
-  /* Load Rotation */
-  MatrixType R(3,3);
-  R(0,0) = 0.999450003479549;   
-  R(0,1) = 0.017033058532942;   
-  R(0,2) = 0.028452863858364;
-  R(1,0) = -0.016471001243502;
-  R(1,1) = 0.999666831145781;
-  R(1,2) = -0.019872916871657;
-  R(2,0) = -0.028781880806608;
-  R(2,1) = 0.019393339680534;
-  R(2,2) = 0.999397569395318;
 
 
   //MatrixType Y2(grads->GetNumberOfTuples()-8,numcoeff);
   //MatrixType Y2 = GetSHBasis2<PixelType>(grads, L);
   //std::cout << gradients * R << std::endl;
-  MatrixType Y2 = GetSHBasis3<double>(gradients * R, L);
     
   //vtkSmartPointer<vtkDoubleArray> Y = vtkDoubleArray::New();
   //GetSHBasis<PixelType>(Y, grads, L);
@@ -374,7 +366,6 @@ int Warp( parameters &args )
   typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
   imageReader->SetFileName( args.inputVolume.c_str() );
   imageReader->Update();
-
 
   /* compute B */
   vnl_vector<double> r(45);
@@ -389,25 +380,45 @@ int Warp( parameters &args )
   vnl_vector<double> B = element_product(r, r+1);
   B = element_product(B,B);
 
-
-
-  /* Compute SHestim */
   typename itk::ImageRegionIterator< VectorImageType > in( imageReader->GetOutput(),  imageReader->GetOutput()->GetLargestPossibleRegion() );
   int isNotZero = 0;
+  MatrixType R(3,3);
+  mwIndex subs[] = {0, 0, 0, 0, 0};
+  mwIndex index;
+  /* for each voxel */
   for( in.GoToBegin(); !in.IsAtEnd(); ++in )
   {
-    //itk::VariableLengthVector< PixelType > data = in.Get();
-    itk::VariableLengthVector< double > data = in.Get();
+    typename VectorImageType::IndexType idx = in.GetIndex();
+    /* get S = [data(j,:) data(j,:)] */
+    itk::VariableLengthVector< double > data = in.Get(); //itk::VariableLengthVector< PixelType > data = in.Get();
     vnl_vector<double> S(2*data.GetNumberOfElements()-16);
     for (int i = 8; i < data.GetNumberOfElements(); i++)
     {
       S(i-8) = data.GetElement(i);
       S(i-8+data.GetNumberOfElements()-8) = data.GetElement(i);
-      if ( S(i-8) > 0.0 ) isNotZero = 1;
+      if ( S(i-8) > 0.0 ) 
+      {
+        isNotZero = 1;
+      }
     }
 
     if (isNotZero)
     {
+      for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++)
+        {
+          subs[0] = i;
+          subs[1] = j;
+          subs[2] = idx[0];
+          subs[3] = idx[1];
+          subs[4] = idx[2];
+          mwSize num_dims = 5;
+          index = mxCalcSingleSubscript(rotations, num_dims, subs);
+          R(i,j) = rot[index];
+        }
+      std::cout << "rotation matrix: " << std::endl << R << std::endl;
+
+      MatrixType Y2 = GetSHBasis3<double>(gradients * R, L);
       std::cout << "Y is " << Y2.rows() << " by " << Y2.columns() << std::endl;
       for (unsigned int i = 0; i < Y2.rows(); i ++)
       {
