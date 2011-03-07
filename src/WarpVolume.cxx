@@ -29,6 +29,8 @@
 
 #include "mat.h"
 
+namespace
+{
 
 struct parameters
 {
@@ -280,28 +282,15 @@ void GetSHBasis(vtkSmartPointer<vtkDoubleArray> &Y, vtkSmartPointer<vtkDoubleArr
   }
 }
 
+
 template< class PixelType > 
-int Warp( parameters &args )
+unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::VectorImage< PixelType , 3 > >::Pointer &imageReader)
 {
+
   const unsigned int Dimension = 3;
-  typedef itk::Vector<float, Dimension>  VectorPixelType;
-  //typedef itk::Image< PixelType, Dimension >  ImageType;
-  typedef itk::OrientedImage< PixelType , Dimension > ImageType;
-  typedef itk::Image<VectorPixelType, Dimension>  DeformationFieldType;
-  typedef itk::WarpImageFilter <ImageType, ImageType, DeformationFieldType>  WarperType;
-  typedef itk::ImageFileReader< DeformationFieldType >    DeformationReaderType;
   typedef itk::VectorImage< PixelType , Dimension > VectorImageType;
-  typedef itk::ImageFileReader< VectorImageType >   ImageReaderType;
-  typedef itk::ImageFileWriter< VectorImageType >   WriterType;
-  //typedef itk::ImageFileWriter< ImageType >   WriterType;
 
-  //itk::MetaDataDictionary dico;
-
-  DeformationReaderType::Pointer   fieldReader = DeformationReaderType::New();
-  fieldReader->SetFileName( args.warp.c_str() );
-  fieldReader->Update();
-
-  /* read input volume */
+/* read input volume */
   vtkSmartPointer<vtkNRRDReader> reader = vtkNRRDReader::New();
   reader->SetFileName(args.inputVolume.c_str());
   reader->Update();
@@ -362,11 +351,7 @@ int Warp( parameters &args )
       //std::cout << Y->GetComponent(i, 44) << std::endl;
   //}
 
-  /* separate into a vector */
-  typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
-  imageReader->SetFileName( args.inputVolume.c_str() );
-  imageReader->Update();
-
+  
   /* compute B */
   vnl_vector<double> r(45);
   vnl_vector<double> a(1);
@@ -385,6 +370,7 @@ int Warp( parameters &args )
   MatrixType R(3,3);
   mwIndex subs[] = {0, 0, 0, 0, 0};
   mwIndex index;
+  int count = 0;
   /* for each voxel */
   for( in.GoToBegin(); !in.IsAtEnd(); ++in )
   {
@@ -401,8 +387,13 @@ int Warp( parameters &args )
         isNotZero = 1;
       }
     }
-
     if (isNotZero)
+    {
+      count++;
+      isNotZero = 0;
+    }
+
+    if (count == 2)
     {
       for (int i = 0; i < 3; i++)
         for (int j = 0; j < 3; j++)
@@ -442,7 +433,35 @@ int Warp( parameters &args )
       return 1;
     }
   }
+}
 
+template< class PixelType > 
+int Warp( parameters &args )
+{
+  const unsigned int Dimension = 3;
+  typedef itk::Vector<float, Dimension>  VectorPixelType;
+  //typedef itk::Image< PixelType, Dimension >  ImageType;
+  typedef itk::OrientedImage< PixelType , Dimension > ImageType;
+  typedef itk::Image<VectorPixelType, Dimension>  DeformationFieldType;
+  typedef itk::WarpImageFilter <ImageType, ImageType, DeformationFieldType>  WarperType;
+  typedef itk::ImageFileReader< DeformationFieldType >    DeformationReaderType;
+  typedef itk::VectorImage< PixelType , Dimension > VectorImageType;
+  typedef itk::ImageFileReader< VectorImageType >   ImageReaderType;
+  typedef itk::ImageFileWriter< VectorImageType >   WriterType;
+  //typedef itk::ImageFileWriter< ImageType >   WriterType;
+
+  //itk::MetaDataDictionary dico;
+
+  DeformationReaderType::Pointer   fieldReader = DeformationReaderType::New();
+  fieldReader->SetFileName( args.warp.c_str() );
+  fieldReader->Update();
+
+  /* separate into a vector */
+  typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
+  imageReader->SetFileName( args.inputVolume.c_str() );
+  imageReader->Update();
+
+  //ComputeSH<PixelType>(args, imageReader);
 
 
   /* warp the image(s) */
@@ -509,6 +528,7 @@ int Warp( parameters &args )
 
 }
 
+}
 
 int main( int argc, char * argv[] )
 {
