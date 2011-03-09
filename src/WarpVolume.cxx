@@ -178,9 +178,6 @@ vnl_matrix<double> createsphere(int levels)
     for (int i=0; i < vertices.size(); i++)
     {
       printf("%f  %f  %f \n", vertices[i][0], vertices[i][1], vertices[i][2]);
-      //std::cout << vertices[i][0] << " ";
-      //std::cout << vertices[i][1] << " ";
-      //std::cout << vertices[i][2] << std::endl;
     }
 
     vnl_matrix<double> vertices_matrix(vertices.size(),3);
@@ -445,8 +442,12 @@ unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::Ve
   int L = 8;
 
   vnl_matrix<double> vertices = createsphere(2);
+  vnl_matrix<double> newY = GetSHBasis3<double>(vertices, L);
 
-  return 1;
+  for (unsigned int i = 0; i < newY.rows(); i ++)
+  {
+    std::cout << newY(i, 1) << std::endl;
+  }
 
   const unsigned int Dimension = 3;
   typedef itk::VectorImage< PixelType , Dimension > VectorImageType;
@@ -473,20 +474,6 @@ unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::Ve
   //mxSetDimensions(rotations, new_dims, num_new_dims);
   double *rot = mxGetPr(rotations);
   
-
-  //R(0,0) = 0.999450003479549;   
-  //R(0,1) = 0.017033058532942;   
-  //R(0,2) = 0.028452863858364;
-  //R(1,0) = -0.016471001243502;
-  //R(1,1) = 0.999666831145781;
-  //R(1,2) = -0.019872916871657;
-  //R(2,0) = -0.028781880806608;
-  //R(2,1) = 0.019393339680534;
-  //R(2,2) = 0.999397569395318;
-
-
-
-
   /* Put gradients into a vnl matrix */
   MatrixType gradients(grads->GetNumberOfTuples()-8, 3);
   for (int i = 8; i < grads->GetNumberOfTuples(); i++)
@@ -586,9 +573,11 @@ unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::Ve
       denominator = vnl_matrix_inverse<double>( denominator );
       //std::cout << "inverse denominator is " << std::endl <<  denominator << std::endl;
       //std::cout << "denominator is " << denominator.rows() << " by " << denominator.columns() << std::endl;
-      vnl_vector<double> numerator =  Y2_t * S;
+      //vnl_vector<double> numerator =  Y2_t * S;
+      vnl_vector<double> Cs = denominator * Y2_t * S;
       //std::cout << "Y2_t * S is " <<  std::endl << Y2_t * S << std::endl;
-      std::cout << "result is " <<  denominator * Y2_t * S << std::endl;
+      vnl_vector<double> sh_coef = newY * Cs;
+      std::cout << "coefficients are " <<  sh_coef << std::endl;
       return 1;
     }
   }
