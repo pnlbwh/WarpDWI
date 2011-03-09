@@ -108,7 +108,8 @@ void subdivide(vector<Triangle>& triangles, vector<Vector>& vertices)
 // levels specifies how many levels of detail we will have
 // levels should be 0 or greater
 // there will be 4^(levels+1) faces in there sphere
-vector<Triangle> createsphere(int levels)
+//vector<Vector> createsphere(int levels)
+vnl_matrix<double> createsphere(int levels)
 {
     
     vector<Triangle> triangles;
@@ -182,7 +183,14 @@ vector<Triangle> createsphere(int levels)
       //std::cout << vertices[i][2] << std::endl;
     }
 
-    return vertices;
+    vnl_matrix<double> vertices_matrix(vertices.size(),3);
+    for(int i = 0; i < vertices.size(); i++)
+    {
+      vertices_matrix(i,0) =  vertices[i][0];
+      vertices_matrix(i,1) =  vertices[i][1];
+      vertices_matrix(i,2) =  vertices[i][2];
+    }
+    return vertices_matrix;
 }
 
 
@@ -433,7 +441,11 @@ void GetSHBasis(vtkSmartPointer<vtkDoubleArray> &Y, vtkSmartPointer<vtkDoubleArr
 template< class PixelType > 
 unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::VectorImage< PixelType , 3 > >::Pointer &imageReader)
 {
-  vector<Triangle> samples = createsphere(2);
+  typedef vnl_matrix<double> MatrixType;
+  int L = 8;
+
+  vnl_matrix<double> vertices = createsphere(2);
+
   return 1;
 
   const unsigned int Dimension = 3;
@@ -474,8 +486,6 @@ unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::Ve
 
 
 
-  typedef vnl_matrix<double> MatrixType;
-  int L = 8;
 
   /* Put gradients into a vnl matrix */
   MatrixType gradients(grads->GetNumberOfTuples()-8, 3);
@@ -610,7 +620,8 @@ int Warp( parameters &args )
   imageReader->SetFileName( args.inputVolume.c_str() );
   imageReader->Update();
 
-  //ComputeSH<PixelType>(args, imageReader);
+  ComputeSH<PixelType>(args, imageReader);
+  return 1;
 
 
   /* warp the image(s) */
