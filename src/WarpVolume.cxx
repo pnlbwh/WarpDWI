@@ -7,6 +7,7 @@
 #include <itkVectorImage.h>
 #include <itkVariableLengthVector.h>
 #include <vector>
+#include <algorithm>
 #include "itkWarpImageFilter.h"
 #include "itkImageFileReader.h"
 #include "itkImageFileWriter.h"
@@ -29,8 +30,37 @@
 
 #include "mat.h"
 
+#include "matrixlib.h"
+
 namespace
 {
+
+
+struct Triangle
+{
+  Vector v0, v1, v2;
+  Vector normal;
+
+  Triangle(Vector v0, Vector v1, Vector v2)
+  {
+    this->v0 = v0;
+    this->v1 = v1;
+    this->v2 = v2;
+  }
+
+  void setnormal(Vector normal)
+  {
+    this->normal = normal;
+  }
+
+  void setnormal(float x, float y, float z)
+  {
+    setnormal(buildvector(x, y, z));
+  }
+
+  Triangle(void) {}
+
+};
 
 struct parameters
 {
@@ -38,6 +68,122 @@ struct parameters
   std::string warp;
   std::string resultsDirectory;
 };
+
+
+
+void subdivide(vector<Triangle>& triangles, vector<Vector>& vertices)
+{
+    unsigned origSize = triangles.size();
+    for (unsigned i = 0 ; i < origSize ; ++i)
+    {
+        Triangle& t = triangles[i];
+        Vector a = t.v0;
+        Vector b = t.v1;
+        Vector c = t.v2;
+        Vector v1 = buildvector(a[0]+b[0], a[1]+b[1], a[2]+b[2]);
+        Vector v2 = buildvector(a[0]+c[0], a[1]+c[1], a[2]+c[2]);
+        Vector v3 = buildvector(b[0]+c[0], b[1]+c[1], b[2]+c[2]);
+        v1.normalize();
+        v2.normalize();
+        v3.normalize();
+        t.v0 = v1; // overwrite the original
+        t.v1 = v3; 
+        t.v2 = v2; 
+        triangles.push_back(Triangle(a, v1, v2));
+        triangles.push_back(Triangle(c, v2, v3));
+        triangles.push_back(Triangle(b, v3, v1));
+
+       if (std::find(vertices.begin(), vertices.end(), v1) != vertices.end() == false)
+         vertices.push_back(v1);
+
+       if (std::find(vertices.begin(), vertices.end(), v2) != vertices.end() == false)
+         vertices.push_back(v2);
+
+       if (std::find(vertices.begin(), vertices.end(), v3) != vertices.end() == false)
+         vertices.push_back(v3);
+    }
+}
+
+
+// levels specifies how many levels of detail we will have
+// levels should be 0 or greater
+// there will be 4^(levels+1) faces in there sphere
+vector<Triangle> createsphere(int levels)
+{
+    
+    vector<Triangle> triangles;
+    vector<Vector> vertices;
+    
+    // build an icosahedron
+    
+    float t = (1 + sqrt(5.0))/2.0;
+    float s = sqrt(1 + t*t);
+    // create the 12 vertices
+    Vector v0 = buildvector(t, 1, 0)/s;
+    Vector v1 = buildvector(-t, 1, 0)/s;
+    Vector v2 = buildvector(t, -1, 0)/s;
+    Vector v3 = buildvector(-t, -1, 0)/s;
+    Vector v4 = buildvector(1, 0, t)/s;
+    Vector v5 = buildvector(1, 0, -t)/s;    
+    Vector v6 = buildvector(-1, 0, t)/s;
+    Vector v7 = buildvector(-1, 0, -t)/s;
+    Vector v8 = buildvector(0, t, 1)/s;
+    Vector v9 = buildvector(0, -t, 1)/s;
+    Vector v10 = buildvector(0, t, -1)/s;
+    Vector v11 = buildvector(0, -t, -1)/s;
+    vertices.push_back(v0);
+    vertices.push_back(v1);
+    vertices.push_back(v2);
+    vertices.push_back(v3);
+    vertices.push_back(v4);
+    vertices.push_back(v5);   
+    vertices.push_back(v6);
+    vertices.push_back(v7);
+    vertices.push_back(v8);
+    vertices.push_back(v9);
+    vertices.push_back(v10);
+    vertices.push_back(v11);
+
+    // create the 20 triangles
+    triangles.push_back(Triangle(v0, v8, v4));
+    triangles.push_back(Triangle(v1, v10, v7));
+    triangles.push_back(Triangle(v2, v9, v11));
+    triangles.push_back(Triangle(v7, v3, v1));    
+    triangles.push_back(Triangle(v0, v5, v10));
+    triangles.push_back(Triangle(v3, v9, v6));
+    triangles.push_back(Triangle(v3, v11, v9));
+    triangles.push_back(Triangle(v8, v6, v4));    
+    triangles.push_back(Triangle(v2, v4, v9));
+    triangles.push_back(Triangle(v3, v7, v11));
+    triangles.push_back(Triangle(v4, v2, v0));
+    triangles.push_back(Triangle(v9, v4, v6));    
+    triangles.push_back(Triangle(v2, v11, v5));
+    triangles.push_back(Triangle(v0, v10, v8));
+    triangles.push_back(Triangle(v5, v0, v2));
+    triangles.push_back(Triangle(v10, v5, v7));    
+    triangles.push_back(Triangle(v1, v6, v8));
+    triangles.push_back(Triangle(v1, v8, v10));
+    triangles.push_back(Triangle(v6, v1, v3));
+    triangles.push_back(Triangle(v11, v7, v5));
+    
+    for (int ctr = 0; ctr < levels; ctr++) 
+    {
+      subdivide(triangles, vertices);
+      //subdivide(triangles);
+    }
+    
+    sort(vertices.begin(), vertices.end());
+    std::cout << "num vertices is " << vertices.size() << std::endl;
+    for (int i=0; i < vertices.size(); i++)
+    {
+      printf("%f  %f  %f \n", vertices[i][0], vertices[i][1], vertices[i][2]);
+      //std::cout << vertices[i][0] << " ";
+      //std::cout << vertices[i][1] << " ";
+      //std::cout << vertices[i][2] << std::endl;
+    }
+
+    return vertices;
+}
 
 
 
@@ -203,6 +349,7 @@ vnl_matrix<double> GetSHBasis2(vtkSmartPointer<vtkDoubleArray> &grads, int L)
   return Y;
 }
 
+
 template< class PixelType>
 vnl_matrix<double> GetSHBasis3(vnl_matrix<double> gradients, int L)
 {
@@ -286,6 +433,8 @@ void GetSHBasis(vtkSmartPointer<vtkDoubleArray> &Y, vtkSmartPointer<vtkDoubleArr
 template< class PixelType > 
 unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::VectorImage< PixelType , 3 > >::Pointer &imageReader)
 {
+  vector<Triangle> samples = createsphere(2);
+  return 1;
 
   const unsigned int Dimension = 3;
   typedef itk::VectorImage< PixelType , Dimension > VectorImageType;
