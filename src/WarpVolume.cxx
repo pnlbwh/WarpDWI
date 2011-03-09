@@ -35,7 +35,6 @@
 namespace
 {
 
-
 struct Triangle
 {
   Vector v0, v1, v2;
@@ -68,8 +67,6 @@ struct parameters
   std::string warp;
   std::string resultsDirectory;
 };
-
-
 
 void subdivide(vector<Triangle>& triangles, vector<Vector>& vertices)
 {
@@ -104,12 +101,7 @@ void subdivide(vector<Triangle>& triangles, vector<Vector>& vertices)
     }
 }
 
-
-// levels specifies how many levels of detail we will have
-// levels should be 0 or greater
-// there will be 4^(levels+1) faces in there sphere
-//vector<Vector> createsphere(int levels)
-vnl_matrix<double> createsphere(int levels)
+vnl_matrix<double> sample_sphere_as_icosahedron(int levels)
 {
     
     vector<Triangle> triangles;
@@ -174,11 +166,11 @@ vnl_matrix<double> createsphere(int levels)
     }
     
     sort(vertices.begin(), vertices.end());
-    std::cout << "num vertices is " << vertices.size() << std::endl;
-    for (int i=0; i < vertices.size(); i++)
-    {
-      printf("%f  %f  %f \n", vertices[i][0], vertices[i][1], vertices[i][2]);
-    }
+    //std::cout << "num vertices is " << vertices.size() << std::endl;
+    //for (int i=0; i < vertices.size(); i++)
+    //{
+      //printf("%f  %f  %f \n", vertices[i][0], vertices[i][1], vertices[i][2]);
+    //}
 
     vnl_matrix<double> vertices_matrix(vertices.size(),3);
     for(int i = 0; i < vertices.size(); i++)
@@ -189,8 +181,6 @@ vnl_matrix<double> createsphere(int levels)
     }
     return vertices_matrix;
 }
-
-
 
 /* 
  * This function was taken from ResampleVolume2.cxx
@@ -291,70 +281,6 @@ std::string WarpedImageName(std::string outputDir, std::string filename)
   return result.str();
 }
 
-//void GetImageType( std::string fileName ,
-                   //itk::ImageIOBase::IOPixelType &pixelType ,
-                   //itk::ImageIOBase::IOComponentType &componentType
-                 //)
-//{
-   //typedef itk::Image< unsigned char , 3 > ImageType;
-   //itk::ImageFileReader< ImageType >::Pointer imageReader;
-   //imageReader = itk::ImageFileReader< ImageType >::New();
-   //imageReader->SetFileName( fileName.c_str() );
-   //imageReader->UpdateOutputInformation();
-   //pixelType = imageReader->GetImageIO()->GetPixelType();
-   //componentType = imageReader->GetImageIO()->GetComponentType();
-//}
-
-
-//template< class PixelType>
-//void GetSHBasis2(vnl_matrix<double> &Y, vtkSmartPointer<vtkDoubleArray> &grads, int L)
-template< class PixelType>
-vnl_matrix<double> GetSHBasis2(vtkSmartPointer<vtkDoubleArray> &grads, int L)
-{
-  int numcoeff = (L+1)*(L+2)/2;
-  //typedef vnl_matrix<PixelType> MatrixType;
-  typedef vnl_matrix<double> MatrixType;
-  MatrixType Y(2*(grads->GetNumberOfTuples()-8), numcoeff);
-  std::cout << "Y is " << Y.rows() << " by " << Y.columns() << std::endl;
-  //Y->SetNumberOfComponents( numcoeff );
-  /* makespharms(u, L) */
-  typedef neurolib::SphericalHarmonicPolynomial<3> SphericalHarmonicPolynomialType;
-  SphericalHarmonicPolynomialType *sphm = new SphericalHarmonicPolynomialType();
-  int flag = 1;
-  int offset = -8;
-  for (int j = 0; j < 2; j++)
-  {
-    //for (int i = 8; i < grads->GetNumberOfTuples(); i ++)
-    for (int i = 8; i < grads->GetNumberOfTuples(); i++)
-    {
-      double theta = acos(flag*grads->GetComponent(i,2));
-      double varphi = atan2(flag*grads->GetComponent(i,1), flag*grads->GetComponent(i,0) );
-      if (varphi < 0) varphi = varphi + 2*M_PI;
-      //double coeff[numcoeff];  
-      int coeff_i = 0;
-      //coeff[coeff_i] = sphm->SH(0,0,theta,varphi);
-      Y(i+offset,coeff_i) = sphm->SH(0,0,theta,varphi);
-      coeff_i++;
-      //std::cout << sphm->SH(0,0,theta,varphi) << " ";
-      for (int l = 2; l <=L; l+=2)
-      {
-        for (int m = l; abs(m) <= l; m--)
-        {
-          //std::cout << sphm->SH(l,m,theta,varphi) << " ";
-          //coeff[coeff_i] = sphm->SH(l,m,theta,varphi);
-          Y(i+offset,coeff_i) = sphm->SH(l,m,theta,varphi);
-          coeff_i++;
-        }
-      }
-      //Y->InsertNextTuple(coeff);
-    }
-    flag = -1;
-    offset = offset + grads->GetNumberOfTuples() - 8;
-  }
-  return Y;
-}
-
-
 template< class PixelType>
 vnl_matrix<double> GetSHBasis3(vnl_matrix<double> gradients, int L)
 {
@@ -398,50 +324,13 @@ vnl_matrix<double> GetSHBasis3(vnl_matrix<double> gradients, int L)
   return Y;
 }
 
-template< class PixelType>
-void GetSHBasis(vtkSmartPointer<vtkDoubleArray> &Y, vtkSmartPointer<vtkDoubleArray> &grads, int L)
-{
-  int numcoeff = (L+1)*(L+2)/2;
-  Y->SetNumberOfComponents( numcoeff );
-  /* makespharms(u, L) */
-  typedef neurolib::SphericalHarmonicPolynomial<3> SphericalHarmonicPolynomialType;
-  SphericalHarmonicPolynomialType *sphm = new SphericalHarmonicPolynomialType();
-  int flag = 1;
-  for (int j = 0; j < 2; j++)
-  {
-    for (int i = 8; i < grads->GetNumberOfTuples(); i ++)
-    {
-      double theta = acos(flag*grads->GetComponent(i,2));
-      double varphi = atan2(flag*grads->GetComponent(i,1), flag*grads->GetComponent(i,0) );
-      if (varphi < 0) varphi = varphi + 2*M_PI;
-      double coeff[numcoeff];  
-      int coeff_i = 0;
-      coeff[coeff_i] = sphm->SH(0,0,theta,varphi);
-      coeff_i++;
-      //std::cout << sphm->SH(0,0,theta,varphi) << " ";
-      for (int l = 2; l <=L; l+=2)
-      {
-        for (int m = l; abs(m) <= l; m--)
-        {
-          //std::cout << sphm->SH(l,m,theta,varphi) << " ";
-          coeff[coeff_i] = sphm->SH(l,m,theta,varphi);
-          coeff_i++;
-        }
-      }
-      Y->InsertNextTuple(coeff);
-    }
-    flag = -1;
-  }
-}
-
-
 template< class PixelType > 
 unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::VectorImage< PixelType , 3 > >::Pointer &imageReader)
 {
   typedef vnl_matrix<double> MatrixType;
   int L = 8;
 
-  vnl_matrix<double> vertices = createsphere(2);
+  vnl_matrix<double> vertices = sample_sphere_as_icosahedron(2);
   vnl_matrix<double> newY = GetSHBasis3<double>(vertices, L);
 
   for (unsigned int i = 0; i < newY.rows(); i ++)
@@ -452,7 +341,7 @@ unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::Ve
   const unsigned int Dimension = 3;
   typedef itk::VectorImage< PixelType , Dimension > VectorImageType;
 
-/* read input volume */
+  /* read input volume */
   vtkSmartPointer<vtkNRRDReader> reader = vtkNRRDReader::New();
   reader->SetFileName(args.inputVolume.c_str());
   reader->Update();
@@ -467,12 +356,9 @@ unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::Ve
     }
 
   /* read in rotation matrix */
-  MATFile *mfile = matOpen("/spl_unsupported/pnlfs/reckbo/projects/CreateDWIAtlas/tests/input/01019-Rgd-fa-Rotation.mat", "r");
-  mxArray *rotations = matGetVariable(mfile, "R");
-  //mwSize num_new_dims = 3;
-  //mwSize new_dims[] = {3, 3, 1762560};
-  //mxSetDimensions(rotations, new_dims, num_new_dims);
-  double *rot = mxGetPr(rotations);
+  //MATFile *mfile = matOpen("/spl_unsupported/pnlfs/reckbo/projects/CreateDWIAtlas/tests/input/01019-Rgd-fa-Rotation.mat", "r");
+  //mxArray *rotations = matGetVariable(mfile, "R");
+  //double *rot = mxGetPr(rotations);
   
   /* Put gradients into a vnl matrix */
   MatrixType gradients(grads->GetNumberOfTuples()-8, 3);
@@ -484,20 +370,6 @@ unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::Ve
     }
   }
 
-
-
-  //MatrixType Y2(grads->GetNumberOfTuples()-8,numcoeff);
-  //MatrixType Y2 = GetSHBasis2<PixelType>(grads, L);
-  //std::cout << gradients * R << std::endl;
-    
-  //vtkSmartPointer<vtkDoubleArray> Y = vtkDoubleArray::New();
-  //GetSHBasis<PixelType>(Y, grads, L);
-  //for (int i = 0; i < Y->GetNumberOfTuples(); i ++)
-  //{
-      //std::cout << Y->GetComponent(i, 44) << std::endl;
-  //}
-
-  
   /* compute B */
   vnl_vector<double> r(45);
   vnl_vector<double> a(1);
@@ -541,46 +413,50 @@ unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::Ve
 
     if (count == 2)
     {
-      for (int i = 0; i < 3; i++)
-        for (int j = 0; j < 3; j++)
-        {
-          subs[0] = i;
-          subs[1] = j;
-          subs[2] = idx[0];
-          subs[3] = idx[1];
-          subs[4] = idx[2];
-          mwSize num_dims = 5;
-          index = mxCalcSingleSubscript(rotations, num_dims, subs);
-          R(i,j) = rot[index];
-        }
-      std::cout << "rotation matrix: " << std::endl << R << std::endl;
+      //for (int i = 0; i < 3; i++)
+        //for (int j = 0; j < 3; j++)
+        //{
+          //subs[0] = i;
+          //subs[1] = j;
+          //subs[2] = idx[0];
+          //subs[3] = idx[1];
+          //subs[4] = idx[2];
+          //mwSize num_dims = 5;
+          //index = mxCalcSingleSubscript(rotations, num_dims, subs);
+          //R(i,j) = rot[index];
+        //}
+      //std::cout << "rotation matrix: " << std::endl << R << std::endl;
 
-      MatrixType Y2 = GetSHBasis3<double>(gradients * R, L);
-      std::cout << "Y is " << Y2.rows() << " by " << Y2.columns() << std::endl;
-      for (unsigned int i = 0; i < Y2.rows(); i ++)
-      {
-        std::cout << Y2(i, 44) << std::endl;
-      }
-      std::cout  << std::endl;
+      //MatrixType Y2 = GetSHBasis3<double>(gradients * R, L);
+      MatrixType Y2 = GetSHBasis3<double>(gradients, L);
+      //std::cout << "Y is " << Y2.rows() << " by " << Y2.columns() << std::endl;
+      //for (unsigned int i = 0; i < Y2.rows(); i ++)
+      //{
+        //std::cout << Y2(i, 44) << std::endl;
+      //}
+      //std::cout  << std::endl;
 
       MatrixType Y2_t = Y2.transpose();
       std::cout << "S is " << S << std::endl;
       vnl_diag_matrix<double> diag =  vnl_diag_matrix<double>(0.003 * B);
       MatrixType denominator = Y2_t * Y2;
-      //std::cout << "Y2_t * Y2 is " <<  denominator << std::endl;
       denominator = denominator +  diag;
-      //std::cout << "Y2_t * Y2 + 0.003 * diag(B) is " <<  denominator << std::endl;
       denominator = vnl_matrix_inverse<double>( denominator );
-      //std::cout << "inverse denominator is " << std::endl <<  denominator << std::endl;
-      //std::cout << "denominator is " << denominator.rows() << " by " << denominator.columns() << std::endl;
-      //vnl_vector<double> numerator =  Y2_t * S;
       vnl_vector<double> Cs = denominator * Y2_t * S;
-      //std::cout << "Y2_t * S is " <<  std::endl << Y2_t * S << std::endl;
       vnl_vector<double> sh_coef = newY * Cs;
-      std::cout << "coefficients are " <<  sh_coef << std::endl;
+      //for (unsigned int i = 0; i < sh_coef.size(); i ++)
+      for (unsigned int i = 0; i < Cs.size(); i ++)
+      {
+        //std::cout << sh_coef(i) << std::endl;
+        std::cout << Cs(i) << std::endl;
+      }
+      std::cout  << std::endl;
+
+      //std::cout << "coefficients are " <<  sh_coef << std::endl;
       return 1;
     }
   }
+
 }
 
 template< class PixelType > 

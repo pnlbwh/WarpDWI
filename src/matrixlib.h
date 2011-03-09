@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <math.h>
+#include <itkNumericTraits.h>
 
 using namespace std;
 
@@ -228,13 +229,23 @@ Vector operator/(const Vector &v, const float &f)
 
 bool operator==(const Vector &v1, const Vector &v2)
 {
-  return (v1[0] == v2[0] && v1[1] == v2[1] && v1[2] == v2[2]);
+  return ( fabs(v1[0] - v2[0])< itk::NumericTraits<double>::epsilon() && fabs(v1[1] - v2[1])<itk::NumericTraits<double>::epsilon() && fabs(v1[2] - v2[2])<itk::NumericTraits<double>::epsilon());
 }
 bool operator<(const Vector &v1, const Vector &v2)
 {
-  return (v1[0] < v2[0]);
+  if ( fabs(v1[0] - v2[0])>itk::NumericTraits<double>::epsilon())
+    return (v1[0] < v2[0]);
+  if ( fabs(v1[1] - v2[1])>itk::NumericTraits<double>::epsilon())
+    return (v1[1] < v2[1]);
+  if ( fabs(v1[2] - v2[2])>itk::NumericTraits<double>::epsilon())
+    return (v1[2] < v2[2]);
 }
 bool operator>(const Vector &v1, const Vector &v2)
-{
-  return (v1[0] > v2[0]);
+{  
+  if ( fabs(v1[0] - v2[0])>itk::NumericTraits<double>::epsilon())
+    return (v1[0] > v2[0]);
+  if ( fabs(v1[1] - v2[1])>itk::NumericTraits<double>::epsilon())
+    return (v1[1] > v2[1]);
+  if ( fabs(v1[2] - v2[2])>itk::NumericTraits<double>::epsilon())
+    return (v1[2] > v2[2]);
 }
