@@ -325,6 +325,27 @@ vnl_matrix<double> GetSHBasis3(vnl_matrix<double> gradients, int L)
 }
 
 template< class PixelType > 
+void PrintMatrix(vnl_matrix<double> matrix, int col)
+{
+  std::cout << "matrix is " << matrix.rows() << " by " << matrix.columns() << std::endl;
+  for (unsigned int i = 0; i < matrix.rows(); i ++)
+  {
+    std::cout << matrix(i, col) << std::endl;
+  }
+  std::cout  << std::endl;
+}
+
+template< class PixelType > 
+void PrintVector(vnl_vector<double> vector)
+{
+  for (unsigned int i = 0; i < vector.size(); i ++)
+  {
+    std::cout << vector(i) << std::endl;
+  }
+  std::cout  << std::endl;
+}
+
+template< class PixelType > 
 unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::VectorImage< PixelType , 3 > >::Pointer &imageReader)
 {
   typedef vnl_matrix<double> MatrixType;
@@ -426,16 +447,9 @@ unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::Ve
           //R(i,j) = rot[index];
         //}
       //std::cout << "rotation matrix: " << std::endl << R << std::endl;
-
       //MatrixType Y2 = GetSHBasis3<double>(gradients * R, L);
+      
       MatrixType Y2 = GetSHBasis3<double>(gradients, L);
-      //std::cout << "Y is " << Y2.rows() << " by " << Y2.columns() << std::endl;
-      //for (unsigned int i = 0; i < Y2.rows(); i ++)
-      //{
-        //std::cout << Y2(i, 44) << std::endl;
-      //}
-      //std::cout  << std::endl;
-
       MatrixType Y2_t = Y2.transpose();
       std::cout << "S is " << S << std::endl;
       vnl_diag_matrix<double> diag =  vnl_diag_matrix<double>(0.003 * B);
@@ -444,15 +458,8 @@ unsigned int ComputeSH( parameters &args, typename itk::ImageFileReader< itk::Ve
       denominator = vnl_matrix_inverse<double>( denominator );
       vnl_vector<double> Cs = denominator * Y2_t * S;
       vnl_vector<double> sh_coef = newY * Cs;
-      //for (unsigned int i = 0; i < sh_coef.size(); i ++)
-      for (unsigned int i = 0; i < Cs.size(); i ++)
-      {
-        //std::cout << sh_coef(i) << std::endl;
-        std::cout << Cs(i) << std::endl;
-      }
-      std::cout  << std::endl;
-
-      //std::cout << "coefficients are " <<  sh_coef << std::endl;
+      PrintVector<double>(Cs);
+ 
       return 1;
     }
   }
