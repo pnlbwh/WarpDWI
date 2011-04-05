@@ -39,6 +39,7 @@ target_link_libraries (${CLP}
   ITKStatistics
   MRML
   vtkTeem
+  vtkCommon
   mat
   )
 
