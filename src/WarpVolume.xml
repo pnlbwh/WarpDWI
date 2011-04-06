@@ -2,7 +2,8 @@
 <executable>
   <category></category>
   <title>Warp Volume</title>
-  <description>
+
+<description>
 </description>
   <version>0.1.0.$Revision: 8595 $(alpha)</version>
   <documentation-url>http://www.slicer.org/slicerWiki/index.php/Modules:</documentation-url>
@@ -11,10 +12,12 @@
 <acknowledgements>
 </acknowledgements>
 
+
 <parameters>
+
+
     <label>IO</label>
     <description>Input/output parameters</description>
-    
     <file multiple="false" fileExtensions="nii.gz">
       <name>inputVolume</name>
       <longflag>inputVolume</longflag>
@@ -23,20 +26,33 @@
       <channel>input</channel>
     </file>
 
-    <directory multiple="false">
-      <name>resultsDirectory</name>
-      <longflag>resultsDirectory</longflag>
-      <description>Directory where warped volume will be saved</description>
-      <label>Results Directory</label>      
+    <label>IO</label>
+    <description>Input/output parameters</description>
+    <file multiple="false" fileExtensions="nii.gz">
+      <name>outputVolume</name>
+      <longflag>outputVolume</longflag>
+      <description>Output volume</description>
+      <label>Volume saved</label>      
       <channel>input</channel>
-    </directory>    
-   
+    </file>
+
+    <label>Resample</label>
+    <description>Resample Flag</description>
+    <boolean>                                                                                                                                                                                                                              
+        <name>resample</name>
+        <label>Resample DWI gradient directions</label>
+        <longflag>--resample</longflag>
+        <description>Resamples the DWI to have a set of canonical gradient directions</description>
+        <default>false</default>
+      </boolean>
+
     <string>
       <name>warp</name>
       <label>Warp</label>
       <longflag>warp</longflag>
       <description>Warp (Deformation) Field</description>
     </string>
+
 </parameters>
 
 </executable>

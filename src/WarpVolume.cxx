@@ -64,8 +64,10 @@ struct Triangle
 struct parameters
 {
   std::string inputVolume;
+  std::string outputVolume;
   std::string warp;
-  std::string resultsDirectory;
+  bool resample;
+  //std::string resultsDirectory;
 };
 
 void subdivide(vector<Triangle>& triangles, vector<Vector>& vertices)
@@ -172,7 +174,7 @@ vnl_matrix<double> sample_sphere_as_icosahedron(int levels)
     //}
 
     vnl_matrix<double> vertices_matrix(vertices.size(),3);
-    for(int i = 0; i < vertices.size(); i++)
+    for(unsigned int i = 0; i < vertices.size(); i++)
     {
       vertices_matrix(i,0) =  vertices[i][0];
       vertices_matrix(i,1) =  vertices[i][1];
@@ -273,12 +275,12 @@ int AddImage( typename itk::VectorImage< PixelType, 3 >
   return EXIT_SUCCESS;
 }
 
-std::string WarpedImageName(std::string outputDir, std::string filename)
-{
-  std::stringstream result;
-  result << outputDir << "/" << itksys::SystemTools::GetFilenameWithoutExtension(filename) << "_warped.nrrd";
-  return result.str();
-}
+//std::string WarpedImageName(std::string outputDir, std::string filename)
+//{
+  //std::stringstream result;
+  //result << outputDir << "/" << itksys::SystemTools::GetFilenameWithoutExtension(filename) << "_warped.nrrd";
+  //return result.str();
+//}
 
 template< class PixelType>
 vnl_matrix<double> GetSHBasis3(vnl_matrix<double> samples, int L)
@@ -335,7 +337,7 @@ void PrintVector(vnl_vector<double> vector)
 }
 
 template< class PixelType > 
-unsigned int ComputeSH( const char* inputVolumeName )
+unsigned int ComputeSH( parameters args )
 {
   const unsigned int Dimension = 3;
   typedef itk::VectorImage< PixelType , Dimension > VectorImageType;
@@ -353,7 +355,7 @@ unsigned int ComputeSH( const char* inputVolumeName )
 
   /* Read in the gradients from the DWI and put into vtkDoubleArray 'grads' */
   vtkSmartPointer<vtkNRRDReader> reader = vtkNRRDReader::New();
-  reader->SetFileName(inputVolumeName);
+  reader->SetFileName(args.inputVolume.c_str());
   reader->Update();
   vtkSmartPointer<vtkDoubleArray> bValues = vtkDoubleArray::New();
   vtkSmartPointer<vtkDoubleArray> grads = vtkDoubleArray::New();
@@ -386,7 +388,7 @@ unsigned int ComputeSH( const char* inputVolumeName )
   
   /* Read the DWI image to be resampled */
   typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
-  imageReader->SetFileName( inputVolumeName );
+  imageReader->SetFileName( args.inputVolume.c_str() );
   imageReader->Update();
 
   /* Configure the new SH image */
@@ -436,7 +438,7 @@ unsigned int ComputeSH( const char* inputVolumeName )
     typename VectorImageType::IndexType idx = in.GetIndex();
     itk::VariableLengthVector< double > data = in.Get(); //itk::VariableLengthVector< PixelType > data = in.Get();
     VectorType S(2*data.GetNumberOfElements()-16); //TODO: the baseline slices are hardcoded to be 8
-    for (int i = 8; i < data.GetNumberOfElements(); i++) 
+    for (unsigned int i = 8; i < data.GetNumberOfElements(); i++) 
     {
       S(i-8) = data.GetElement(i);
       S(i-8+data.GetNumberOfElements()-8) = data.GetElement(i);
@@ -457,7 +459,7 @@ unsigned int ComputeSH( const char* inputVolumeName )
   }
 
   typename WriterType::Pointer  writer =  WriterType::New();
-  writer->SetFileName( "sh_image.nrrd" );
+  writer->SetFileName( args.outputVolume.c_str() );
   writer->SetInput( outputImage );
   writer->SetUseCompression( true );
   try
@@ -471,11 +473,17 @@ unsigned int ComputeSH( const char* inputVolumeName )
     exit( EXIT_FAILURE );
   }
 
+  return 1;
 }
 
 template< class PixelType > 
 int Warp( parameters &args )
 {
+  if (args.resample)
+  {
+    return ComputeSH<PixelType>(args);
+  }
+
   const unsigned int Dimension = 3;
   typedef itk::Vector<float, Dimension>  VectorPixelType;
   //typedef itk::Image< PixelType, Dimension >  ImageType;
@@ -491,9 +499,6 @@ int Warp( parameters &args )
   DeformationReaderType::Pointer  fieldReader = DeformationReaderType::New();
   fieldReader->SetFileName( args.warp.c_str() );
   fieldReader->Update();
-
-  ComputeSH<PixelType>(args.inputVolume.c_str());
-  return 1;
 
   /* separate into a vector */
   typedef itk::ImageFileReader< VectorImageType >   ImageReaderType;
@@ -532,7 +537,8 @@ int Warp( parameters &args )
   //warper->SetOutputDirection( imageReader->GetOutput()->GetDirection() );
 
   typename WriterType::Pointer  writer =  WriterType::New();
-  writer->SetFileName( WarpedImageName(args.resultsDirectory, args.inputVolume) );
+  //writer->SetFileName( WarpedImageName(args.resultsDirectory, args.inputVolume) );
+  writer->SetFileName( args.outputVolume );
   writer->SetInput( outputImage );
   //writer->SetInput( imageReader->GetOutput() );
   writer->SetUseCompression( true );
@@ -569,19 +575,21 @@ int Warp( parameters &args )
 int main( int argc, char * argv[] )
 {
   PARSE_ARGS;
+  parameters args;
+  args.warp = warp;
+  args.outputVolume = outputVolume;
+  args.inputVolume = inputVolume;
+  args.resample = resample;
 
-  std::cout << "output directory:" << resultsDirectory << std::endl;
-  std::cout << "warp:" << warp << std::endl;
-  std::cout << "input volume:" << inputVolume << std::endl;
+  std::cout << "warp:" << args.warp << std::endl;
+  std::cout << "input volume:" << args.inputVolume << std::endl;
+  std::cout << "output volume:" << args.outputVolume << std::endl;
+  std::cout << "resample:" << args.resample << std::endl;
 
   itk::ImageIOBase::IOPixelType pixelType;
   itk::ImageIOBase::IOComponentType componentType;
-  GetImageType( inputVolume , pixelType , componentType );
+  GetImageType( args.inputVolume , pixelType , componentType );
 
-  parameters args;
-  args.resultsDirectory = resultsDirectory;
-  args.warp = warp;
-  args.inputVolume = inputVolume;
 
   switch( componentType )
    {
