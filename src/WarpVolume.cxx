@@ -67,6 +67,7 @@ struct parameters
   std::string outputVolume;
   std::string warp;
   bool resample;
+  bool resample_self;
   //std::string resultsDirectory;
 };
 
@@ -349,11 +350,8 @@ unsigned int ComputeSH( parameters args )
   const unsigned int L = 8;
   const unsigned int num_basis_functions = (L+1)*(L+2)/2;
 
-  /* Get the SH basis function values for our new set of sphere samples */
-  MatrixType vertices = sample_sphere_as_icosahedron(2); //std::cout << "num vertices is " << vertices.rows() << std::endl;
-  MatrixType newY = GetSHBasis3<double>(vertices, L); //std::cout << "newY size is: " << newY.rows() << std::endl;
-
   /* Read in the gradients from the DWI and put into vtkDoubleArray 'grads' */
+  /* TODO: use itk:ImageFileReader<VectorImage<PixelType, 3>> and itk::MetaDataDictionary */
   vtkSmartPointer<vtkNRRDReader> reader = vtkNRRDReader::New();
   reader->SetFileName(args.inputVolume.c_str());
   reader->Update();
@@ -386,6 +384,18 @@ unsigned int ComputeSH( parameters args )
       }
 
   
+  /* Get the SH basis function values for our new set of sphere samples */
+  MatrixType newY;
+  if (args.resample_self) //I'll use this option to test how well the resampling does
+  {
+    newY = GetSHBasis3<double>(gradients, L); //std::cout << "newY size is: " << newY.rows() << std::endl;
+  }
+  else
+  {
+    MatrixType vertices = sample_sphere_as_icosahedron(2); //std::cout << "num vertices is " << vertices.rows() << std::endl;
+    newY = GetSHBasis3<double>(vertices, L); //std::cout << "newY size is: " << newY.rows() << std::endl;
+  }
+
   /* Read the DWI image to be resampled */
   typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
   imageReader->SetFileName( args.inputVolume.c_str() );
@@ -479,7 +489,7 @@ unsigned int ComputeSH( parameters args )
 template< class PixelType > 
 int Warp( parameters &args )
 {
-  if (args.resample)
+  if (args.resample || args.resample_self)
   {
     return ComputeSH<PixelType>(args);
   }
@@ -580,11 +590,13 @@ int main( int argc, char * argv[] )
   args.outputVolume = outputVolume;
   args.inputVolume = inputVolume;
   args.resample = resample;
+  args.resample_self = resample_self;
 
   std::cout << "warp:" << args.warp << std::endl;
   std::cout << "input volume:" << args.inputVolume << std::endl;
   std::cout << "output volume:" << args.outputVolume << std::endl;
   std::cout << "resample:" << args.resample << std::endl;
+  std::cout << "resample_self:" << args.resample_self << std::endl;
 
   itk::ImageIOBase::IOPixelType pixelType;
   itk::ImageIOBase::IOComponentType componentType;

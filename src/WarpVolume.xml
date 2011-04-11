@@ -14,45 +14,43 @@
 
 
 <parameters>
-
-
-    <label>IO</label>
-    <description>Input/output parameters</description>
-    <file multiple="false" fileExtensions="nii.gz">
-      <name>inputVolume</name>
-      <longflag>inputVolume</longflag>
-      <description>Input volume</description>
-      <label>Volume to warp</label>      
-      <channel>input</channel>
-    </file>
-
-    <label>IO</label>
-    <description>Input/output parameters</description>
-    <file multiple="false" fileExtensions="nii.gz">
-      <name>outputVolume</name>
-      <longflag>outputVolume</longflag>
-      <description>Output volume</description>
-      <label>Volume saved</label>      
-      <channel>input</channel>
-    </file>
-
-    <label>Resample</label>
-    <description>Resample Flag</description>
+    <label>Input/Output</label>
+    <description>Input/Output Parameters</description>
+     <image type="any">
+        <name>inputVolume</name>
+        <label>Input Volume</label>
+        <channel>input</channel>
+        <index>0</index>
+        <description>Input Volume to be resampled</description>
+      </image>
+     <image type="any">
+        <name>warp</name>
+        <label>Warp Volume</label>
+        <channel>input</channel>
+        <longflag>--warp</longflag>
+        <description>The deformation field</description>
+      </image>
+    <image type="any">
+       <name>outputVolume</name>
+       <label>Output Volume</label>
+       <channel>output</channel>
+       <index>1</index>
+       <description>Resampled and/or warped volume</description>
+    </image>
     <boolean>                                                                                                                                                                                                                              
-        <name>resample</name>
-        <label>Resample DWI gradient directions</label>
-        <longflag>--resample</longflag>
-        <description>Resamples the DWI to have a set of canonical gradient directions</description>
-        <default>false</default>
-      </boolean>
-
-    <string>
-      <name>warp</name>
-      <label>Warp</label>
-      <longflag>warp</longflag>
-      <description>Warp (Deformation) Field</description>
-    </string>
-
+      <name>resample</name>
+      <label>Resample DWI gradient directions?</label>
+      <longflag>--resample</longflag>
+      <description>Resamples the DWI to have a set of canonical gradient directions</description>
+      <default>false</default>
+    </boolean>
+   <boolean>                                                                                                                                                                                                                              
+      <name>resample_self</name>
+      <label>Resample DWI at its own gradient directions?</label>
+      <longflag>--resample_self</longflag>
+      <description>Resamples the DWI at its own gradient directions</description>
+      <default>false</default>
+    </boolean>
 </parameters>
 
 </executable>
