@@ -51,6 +51,14 @@
       <description>Resamples the DWI at its own gradient directions</description>
       <default>false</default>
     </boolean>
+   <boolean>                                                                                                                                                                                                                              
+      <name>without_baselines</name>
+      <label>Save output image without the baselines?</label>
+      <longflag>--without_baselines</longflag>
+      <description></description>
+      <default>false</default>
+    </boolean>
+
 </parameters>
 
 </executable>

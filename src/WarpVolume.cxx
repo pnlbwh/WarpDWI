@@ -6,6 +6,8 @@
 #include <itkImageRegionIterator.h>
 #include <itkVectorImage.h>
 #include <itkVariableLengthVector.h>
+#include <itkMetaDataObject.h>
+#include <itkVectorContainer.h>
 #include <vector>
 #include <algorithm>
 #include "itkWarpImageFilter.h"
@@ -68,6 +70,7 @@ struct parameters
   std::string warp;
   bool resample;
   bool resample_self;
+  bool without_baselines;
   //std::string resultsDirectory;
 };
 
@@ -316,7 +319,6 @@ vnl_matrix<double> GetSHBasis3(vnl_matrix<double> samples, int L)
   return Y;
 }
 
-template< class PixelType > 
 void PrintMatrix(vnl_matrix<double> matrix, int col)
 {
   std::cout << "matrix is " << matrix.rows() << " by " << matrix.columns() << std::endl;
@@ -337,6 +339,126 @@ void PrintVector(vnl_vector<double> vector)
   std::cout  << std::endl;
 }
 
+struct header_struct {
+  vnl_matrix<double> gradients;
+  unsigned int numberOfBaselineImages;
+};
+
+void PrintDictionary(itk::MetaDataDictionary& dico)
+{
+  std::vector<std::string> imgMetaKeys = dico.GetKeys();
+  std::vector<std::string>::const_iterator itKey = imgMetaKeys.begin();
+  std::string metaString;
+
+  std::cout << "=====================================================================" << std::endl;
+  std::cout << "The input image's dictionary header" << std::endl;
+  std::cout << "=====================================================================" << std::endl;
+  for (; itKey != imgMetaKeys.end(); itKey ++)
+  {
+    itk::ExposeMetaData<std::string> (dico, *itKey, metaString);
+    std::cout << *itKey << " ---> " << metaString << std::endl;
+  }
+  std::cout << "=====================================================================" << std::endl;
+}
+
+header_struct GetGradients(itk::MetaDataDictionary& imgMetaDictionary)
+{
+  unsigned int numberOfGradientImages = 0;
+  unsigned int numberOfImages = 0;
+  bool readb0 = false;
+  double b0 = 0;
+
+  typedef vnl_vector_fixed<double,3> GradientDirectionType;
+  GradientDirectionType vec3d;
+  typedef itk::VectorContainer<unsigned int, GradientDirectionType> GradientDirectionContainerType;
+  GradientDirectionContainerType::Pointer diffusionVectors = GradientDirectionContainerType::New(); 
+
+  std::vector<std::string> imgMetaKeys = imgMetaDictionary.GetKeys();
+  std::vector<std::string>::const_iterator itKey = imgMetaKeys.begin();
+  std::string metaString;
+
+  for (; itKey != imgMetaKeys.end(); itKey ++)
+    {
+    double x,y,z;
+
+    itk::ExposeMetaData<std::string> (imgMetaDictionary, *itKey, metaString);
+    if (itKey->find("DWMRI_gradient") != std::string::npos)
+    {
+      sscanf(metaString.c_str(), "%lf %lf %lf\n", &x, &y, &z);
+      vec3d[0] = x; vec3d[1] = y; vec3d[2] = z;
+      diffusionVectors->InsertElement( numberOfImages, vec3d );
+      ++numberOfImages;
+      if (vec3d[0] == 0.0 && vec3d[1] == 0.0 && vec3d[2] == 0.0)  //baseline image
+      {
+        continue;
+      }
+      ++numberOfGradientImages;
+    }
+    else if (itKey->find("DWMRI_b-value") != std::string::npos)
+    {
+      readb0 = true;
+      b0 = atof(metaString.c_str());
+    }
+  }
+  std::cout << "Number of gradient images: "
+            << numberOfGradientImages
+            << " and Number of baseline images: "
+            << numberOfImages - numberOfGradientImages
+            << std::endl;
+  if(!readb0)
+  {
+    std::cerr << "BValue not specified in header file" << std::endl;
+  }
+
+  vnl_matrix<double> gradients(numberOfGradientImages, 3);
+  unsigned int gradientIndex = 0;
+  for (unsigned int i = 0; i < numberOfImages; i++)
+  {
+    if (diffusionVectors->ElementAt(i).two_norm() <= 0.0) // this is a baseline image
+      continue;
+    gradients(gradientIndex,0) = (diffusionVectors->ElementAt(i))[0];
+    gradients(gradientIndex,1) = (diffusionVectors->ElementAt(i))[1];
+    gradients(gradientIndex,2) = (diffusionVectors->ElementAt(i))[2];
+    gradientIndex++;
+  }
+
+  header_struct hdr;
+  hdr.gradients = gradients;
+  hdr.numberOfBaselineImages = numberOfImages - numberOfGradientImages;
+  return hdr;
+}
+
+void UpdateMetaDataDictionary(itk::MetaDataDictionary &new_dico, itk::MetaDataDictionary &dico, vnl_matrix<double> new_gradients, unsigned int numBaselines)
+{
+  std::vector<std::string> imgMetaKeys = dico.GetKeys();
+  std::vector<std::string>::const_iterator itKey = imgMetaKeys.begin();
+  std::string metaString;
+  for (; itKey != imgMetaKeys.end(); itKey ++)
+  {
+    itk::ExposeMetaData<std::string> (dico, *itKey, metaString);
+    if (itKey->find("DWMRI_gradient") == std::string::npos)
+      itk::EncapsulateMetaData<std::string>(new_dico, *itKey, metaString);
+  }
+   
+  std::string key_string("DWMRI_gradient_%04i");
+  std::string value_string("%lf %lf %lf");
+  char key[50];
+  char value[100];
+  for (unsigned int i=0; i < numBaselines; i++)
+  {
+    sprintf(key , key_string.c_str(), i);
+    sprintf(value , value_string.c_str(), 0.0, 0.0, 0.0);
+    itk::EncapsulateMetaData<std::string>(new_dico, key, value);
+  }
+  for (unsigned int i=numBaselines; i < new_gradients.rows() + numBaselines; i++)
+  {
+    sprintf(key , key_string.c_str(), i);
+    sprintf(value , value_string.c_str(), new_gradients[i-numBaselines][0], new_gradients[i-numBaselines][1], new_gradients[i-numBaselines][2]);
+    itk::EncapsulateMetaData<std::string>(new_dico, key, value);
+  }
+
+}
+
 template< class PixelType > 
 unsigned int ComputeSH( parameters args )
 {
@@ -344,62 +466,49 @@ unsigned int ComputeSH( parameters args )
   typedef itk::VectorImage< PixelType , Dimension > VectorImageType;
   typedef itk::ImageFileReader< VectorImageType >   ImageReaderType;
   typedef itk::ImageFileWriter< VectorImageType >   WriterType;
+  itk::MetaDataDictionary input_dico;
+  itk::MetaDataDictionary output_dico;
 
   typedef vnl_matrix<double> MatrixType;  //hardcoded the type for now because some vnl implementations are limited to just a few (including 'double')
   typedef vnl_vector<double> VectorType;  //hardcoded the type for now because some vnl implementations are limited to just a few (including 'double')
   const unsigned int L = 8;
   const unsigned int num_basis_functions = (L+1)*(L+2)/2;
 
-  /* Read in the gradients from the DWI and put into vtkDoubleArray 'grads' */
-  /* TODO: use itk:ImageFileReader<VectorImage<PixelType, 3>> and itk::MetaDataDictionary */
-  vtkSmartPointer<vtkNRRDReader> reader = vtkNRRDReader::New();
-  reader->SetFileName(args.inputVolume.c_str());
-  reader->Update();
-  vtkSmartPointer<vtkDoubleArray> bValues = vtkDoubleArray::New();
-  vtkSmartPointer<vtkDoubleArray> grads = vtkDoubleArray::New();
-  vtkSmartPointer<vtkMRMLNRRDStorageNode> helper = vtkMRMLNRRDStorageNode::New();
-  if ( !helper->ParseDiffusionInformation(reader,grads,bValues) )
-    {
-    std::cerr << "Error parsing Diffusion information" << std::endl;
-    return EXIT_FAILURE;
-    }
-
-  /* read in rotation matrix */
-  //MATFile *mfile = matOpen("/spl_unsupported/pnlfs/reckbo/projects/CreateDWIAtlas/tests/input/01019-Rgd-fa-Rotation.mat", "r");
-  //mxArray *rotations = matGetVariable(mfile, "R");
-  //double *rot = mxGetPr(rotations);
-  
-  /* Transfer the gradients to a vnl matrix, because we're going use vnl math operations on it */
-  MatrixType gradients( 2*(grads->GetNumberOfTuples()-8), 3 );
-  for (int k = 0; k < 2; k++)
-    for (int i = 8; i < grads->GetNumberOfTuples(); i++)
-      for (int j = 0; j < 3; j++)
-      {
-        if (k == 0)
-          gradients(i-8,j) = grads->GetComponent(i,j);
-        else
-        {
-          gradients(i-8+grads->GetNumberOfTuples()-8,j) = -1 * grads->GetComponent(i,j);
-        }
-      }
-
-  
-  /* Get the SH basis function values for our new set of sphere samples */
-  MatrixType newY;
-  if (args.resample_self) //I'll use this option to test how well the resampling does
-  {
-    newY = GetSHBasis3<double>(gradients, L); //std::cout << "newY size is: " << newY.rows() << std::endl;
-  }
-  else
-  {
-    MatrixType vertices = sample_sphere_as_icosahedron(2); //std::cout << "num vertices is " << vertices.rows() << std::endl;
-    newY = GetSHBasis3<double>(vertices, L); //std::cout << "newY size is: " << newY.rows() << std::endl;
-  }
-
   /* Read the DWI image to be resampled */
   typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
   imageReader->SetFileName( args.inputVolume.c_str() );
   imageReader->Update();
+
+  /* Get the gradients and number of baseline images */
+  input_dico = imageReader->GetOutput()->GetMetaDataDictionary(); //save metadata dictionary
+  PrintDictionary(input_dico);
+  //MatrixType gradients = GetGradients(input_dico);
+  header_struct hdr = GetGradients(input_dico);
+  MatrixType gradients = hdr.gradients; 
+  unsigned int numberOfBaselineImages = hdr.numberOfBaselineImages;
+  MatrixType duplicated_gradients(2*gradients.rows(), 3);
+  duplicated_gradients.update(gradients, 0, 0);
+  duplicated_gradients.update(gradients * -1, gradients.rows(), 0);
+
+  /* Get new sample directions, save them to the output header, and evaluate their SH basis function values */
+  MatrixType newY;
+  if (args.resample_self) //This option is used to test how well the resampling does
+  {
+    newY = GetSHBasis3<double>(gradients, L); 
+    if (args.without_baselines)
+      UpdateMetaDataDictionary(output_dico, input_dico, gradients, 0);
+    else
+      UpdateMetaDataDictionary(output_dico, input_dico, gradients, numberOfBaselineImages);
+  }
+  else
+  {
+    MatrixType vertices = sample_sphere_as_icosahedron(2);
+    newY = GetSHBasis3<double>(vertices, L); 
+    if (args.without_baselines)
+      UpdateMetaDataDictionary(output_dico, input_dico, vertices, 0);
+    else
+      UpdateMetaDataDictionary(output_dico, input_dico, vertices, numberOfBaselineImages);
+  }
 
   /* Configure the new SH image */
   typename VectorImageType::Pointer outputImage = VectorImageType::New();
@@ -407,8 +516,11 @@ unsigned int ComputeSH( parameters args )
   outputImage->SetOrigin( imageReader->GetOutput()->GetOrigin() );
   outputImage->SetDirection( imageReader->GetOutput()->GetDirection() );
   outputImage->SetSpacing( imageReader->GetOutput()->GetSpacing() );
-  //outputImage->SetVectorLength( imageReader->GetOutput()->GetVectorLength() );
-  outputImage->SetVectorLength( 162 ); //TODO: soft code this
+  if (args.without_baselines)
+    outputImage->SetVectorLength( newY.rows() ); 
+  else
+    outputImage->SetVectorLength( newY.rows() + numberOfBaselineImages ); 
+  outputImage->SetMetaDataDictionary(output_dico);
   outputImage->Allocate();
 
   //int isNotZero = 0;
@@ -431,7 +543,7 @@ unsigned int ComputeSH( parameters args )
   B = element_product(B,B);
 
   /* Get the value for each of the (L+1)*(L+2)/2 SH basis functions at each gradient direction */
-  MatrixType Y2 = GetSHBasis3<double>(gradients, L);
+  MatrixType Y2 = GetSHBasis3<double>(duplicated_gradients, L);
 
   /* Perform part of the gradient SH projection computation */ 
   MatrixType Y2_t = Y2.transpose();
@@ -447,11 +559,11 @@ unsigned int ComputeSH( parameters args )
     /* get S = [data(j,:) data(j,:)], the data vector with twice the size as the number of gradients */
     typename VectorImageType::IndexType idx = in.GetIndex();
     itk::VariableLengthVector< double > data = in.Get(); //itk::VariableLengthVector< PixelType > data = in.Get();
-    VectorType S(2*data.GetNumberOfElements()-16); //TODO: the baseline slices are hardcoded to be 8
-    for (unsigned int i = 8; i < data.GetNumberOfElements(); i++) 
+    VectorType S(2*data.GetNumberOfElements()-(2*numberOfBaselineImages)); 
+    for (unsigned int i = numberOfBaselineImages; i < data.GetNumberOfElements(); i++) 
     {
-      S(i-8) = data.GetElement(i);
-      S(i-8+data.GetNumberOfElements()-8) = data.GetElement(i);
+      S(i-numberOfBaselineImages) = data.GetElement(i);
+      S(i-2*numberOfBaselineImages+data.GetNumberOfElements()) = data.GetElement(i);
     }
 
     /* Compute the SH projection, 'Cs', of this voxel's gradient function onto (L+1)(L+2)/2 basis functions. So 'Cs' is a vector of size (L+1)(L+2)/2. */
@@ -461,13 +573,19 @@ unsigned int ComputeSH( parameters args )
     VectorType sh_coef = newY * Cs;
 
     /* Save the new values to the output image */ 
-    itk::VariableLengthVector<double> sh_coef_final;
-    sh_coef_final.SetSize(sh_coef.size());
-    for (int i = 0; i < sh_coef.size(); i ++)
-      sh_coef_final[i] = sh_coef[i];
-    outputImage->SetPixel(idx, sh_coef_final);
+    unsigned int start = 0;
+    if (!args.without_baselines)
+      start = numberOfBaselineImages;
+    itk::VariableLengthVector<double> final_data;
+    final_data.SetSize(start + sh_coef.size());
+    for (int i = 0; i < start; i++)
+      final_data[i] = data.GetElement(i);
+    for (int i = start; i < final_data.GetSize(); i++)
+      final_data[i] = sh_coef[i-start];
+    outputImage->SetPixel(idx, final_data);
   }
 
+  /* Write the resampled DWI */
   typename WriterType::Pointer  writer =  WriterType::New();
   writer->SetFileName( args.outputVolume.c_str() );
   writer->SetInput( outputImage );
@@ -506,20 +624,22 @@ int Warp( parameters &args )
   //typedef itk::ImageFileWriter< ImageType >   WriterType;
   //itk::MetaDataDictionary dico;
 
-  DeformationReaderType::Pointer  fieldReader = DeformationReaderType::New();
-  fieldReader->SetFileName( args.warp.c_str() );
-  fieldReader->Update();
-
-  /* separate into a vector */
+  /* read in input image */
   typedef itk::ImageFileReader< VectorImageType >   ImageReaderType;
   typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
   imageReader->SetFileName( args.inputVolume.c_str() );
   imageReader->Update();
 
-  /* warp the image(s) */
+  /* read in deformation field */
+  DeformationReaderType::Pointer  fieldReader = DeformationReaderType::New();
+  fieldReader->SetFileName( args.warp.c_str() );
+  fieldReader->Update();
+
+  /* warp the image */
   typename WarperType::Pointer   warper = WarperType::New();
   warper->SetDeformationField( fieldReader->GetOutput() );
 
+  /* separate into a vector */
   std::vector< typename ImageType::Pointer > vectorOutputImage ;
   std::vector< typename ImageType::Pointer > vectorOfImage;
   SeparateImages< PixelType >( imageReader->GetOutput() , vectorOfImage ) ;
@@ -563,21 +683,7 @@ int Warp( parameters &args )
     exit( EXIT_FAILURE );
   }
 
-  /* debug */
-  //writer->SetInput( vectorOfImage[7] );
-  //writer->SetFileName( "./component7.nrrd" );
-  //writer->SetUseCompression( true );
-  //try
-  //{
-    //writer->Update();
-  //}
-  //catch( itk::ExceptionObject& err )
-  //{
-    //std::cout << "Could not write 5th component" << std::endl;
-    //std::cout << err << std::endl;
-    //exit( EXIT_FAILURE );
-  //}
-
+  return EXIT_SUCCESS;
 }
 
 }
@@ -591,6 +697,7 @@ int main( int argc, char * argv[] )
   args.inputVolume = inputVolume;
   args.resample = resample;
   args.resample_self = resample_self;
+  args.without_baselines = without_baselines;
 
   std::cout << "warp:" << args.warp << std::endl;
   std::cout << "input volume:" << args.inputVolume << std::endl;
