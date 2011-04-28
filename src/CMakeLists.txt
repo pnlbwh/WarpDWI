@@ -16,7 +16,8 @@ slicer3_set_default_install_prefix_for_external_projects()
 
 link_directories(${ModuleDescriptionParser_BINARY_DIR} "/local/os/pkg/matlab-R2010a/bin/glnxa64")
 include_directories( ${SlicerBaseCLI_BINARY_DIR} ${SlicerBaseCLI_SOURCE_DIR} )
-include_directories( "/local/os/pkg/matlab-R2010a/extern/include" )
+#include_directories( "/local/os/pkg/matlab-R2010a/extern/include" )
+#include_directories( "/projects/schiz/software/Slicer3_forExternalLinking/Slicer3-lib/Insight/Utilities/vxl/core/vnl/algo")
 #include_directories( . )
 
 #####################

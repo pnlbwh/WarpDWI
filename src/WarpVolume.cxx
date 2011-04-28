@@ -18,6 +18,8 @@
 #include "SphericalHarmonicPolynomial.h"
 #include <math.h>
 
+//#include "vnl_qr.h"
+
 #include "itkPluginFilterWatcher.h"
 #include "itkPluginUtilities.h"
 #include "vtkSmartPointer.h"
@@ -30,7 +32,7 @@
 #include "vtkImageData.h"
 #include "vtkDoubleArray.h"
 
-#include "mat.h"
+//#include "mat.h"
 
 #include "matrixlib.h"
 
@@ -318,7 +320,15 @@ vnl_matrix<double> GetSHBasis3(vnl_matrix<double> samples, int L)
   std::cout << "num rows of Y is: " << Y.rows() << std::endl;
   return Y;
 }
-
+void PrintMatrixRow(vnl_matrix<double> matrix, int row)
+{
+  std::cout << "matrix is " << matrix.rows() << " by " << matrix.columns() << std::endl;
+  for (unsigned int i = 0; i < matrix.cols(); i ++)
+  {
+    std::cout << matrix(row, i) << std::endl;
+  }
+  std::cout  << std::endl;
+}
 void PrintMatrix(vnl_matrix<double> matrix, int col)
 {
   std::cout << "matrix is " << matrix.rows() << " by " << matrix.columns() << std::endl;
@@ -329,7 +339,6 @@ void PrintMatrix(vnl_matrix<double> matrix, int col)
   std::cout  << std::endl;
 }
 
-template< class PixelType > 
 void PrintVector(vnl_vector<double> vector)
 {
   for (unsigned int i = 0; i < vector.size(); i ++)
@@ -459,6 +468,15 @@ void UpdateMetaDataDictionary(itk::MetaDataDictionary &new_dico, itk::MetaDataDi
 
 }
 
+void PrintVertices(vnl_matrix<double> vertices)
+{
+  for (unsigned int i = 0; i < vertices.rows(); i ++)
+  {
+    std::cout << vertices(i, 0) << " " << vertices(i, 1) << " " << vertices(i, 2) << std::endl;
+  }
+}
+
+
 template< class PixelType > 
 unsigned int ComputeSH( parameters args )
 {
@@ -510,7 +528,6 @@ unsigned int ComputeSH( parameters args )
       UpdateMetaDataDictionary(output_dico, input_dico, vertices, numberOfBaselineImages);
   }
 
-  /* Configure the new SH image */
   typename VectorImageType::Pointer outputImage = VectorImageType::New();
   outputImage->SetRegions( imageReader->GetOutput()->GetLargestPossibleRegion().GetSize() );
   outputImage->SetOrigin( imageReader->GetOutput()->GetOrigin() );
@@ -538,7 +555,8 @@ unsigned int ComputeSH( parameters args )
   {
     a.set_size(2*l+1);
     a.fill(l);
-    r.update(a, end); end += a.size(); }
+    r.update(a, end); end += a.size(); 
+  }
   VectorType B = element_product(r, r+1);
   B = element_product(B,B);
 
@@ -551,6 +569,8 @@ unsigned int ComputeSH( parameters args )
   vnl_diag_matrix<double> diag =  vnl_diag_matrix<double>(0.003 * B);
   denominator = denominator +  diag;
   denominator = vnl_matrix_inverse<double>( denominator );
+  //denominator = vnl_qr<double>( denominator ).inverse();
+  //denominator = vnl_svd<double>( denominator ).inverse();
 
   /* do for each voxel */
   typename itk::ImageRegionIterator< VectorImageType > in( imageReader->GetOutput(),  imageReader->GetOutput()->GetLargestPossibleRegion() );
@@ -568,7 +588,7 @@ unsigned int ComputeSH( parameters args )
 
     /* Compute the SH projection, 'Cs', of this voxel's gradient function onto (L+1)(L+2)/2 basis functions. So 'Cs' is a vector of size (L+1)(L+2)/2. */
     VectorType Cs = denominator * Y2_t * S;
-
+    
     /* Compute the voxel's values at the new sample directions */
     VectorType sh_coef = newY * Cs;
 
