@@ -2,7 +2,8 @@
 <executable>
   <category></category>
   <title>Warp Volume</title>
-  <description>
+
+<description>
 </description>
   <version>0.1.0.$Revision: 8595 $(alpha)</version>
   <documentation-url>http://www.slicer.org/slicerWiki/index.php/Modules:</documentation-url>
@@ -11,32 +12,53 @@
 <acknowledgements>
 </acknowledgements>
 
-<parameters>
-    <label>IO</label>
-    <description>Input/output parameters</description>
-    
-    <file multiple="false" fileExtensions="nii.gz">
-      <name>inputVolume</name>
-      <longflag>inputVolume</longflag>
-      <description>Input volume</description>
-      <label>Volume to warp</label>      
-      <channel>input</channel>
-    </file>
 
-    <directory multiple="false">
-      <name>resultsDirectory</name>
-      <longflag>resultsDirectory</longflag>
-      <description>Directory where warped volume will be saved</description>
-      <label>Results Directory</label>      
-      <channel>input</channel>
-    </directory>    
-   
-    <string>
-      <name>warp</name>
-      <label>Warp</label>
-      <longflag>warp</longflag>
-      <description>Warp (Deformation) Field</description>
-    </string>
+<parameters>
+    <label>Input/Output</label>
+    <description>Input/Output Parameters</description>
+     <image type="any">
+        <name>inputVolume</name>
+        <label>Input Volume</label>
+        <channel>input</channel>
+        <index>0</index>
+        <description>Input Volume to be resampled</description>
+      </image>
+     <image type="any">
+        <name>warp</name>
+        <label>Warp Volume</label>
+        <channel>input</channel>
+        <longflag>--warp</longflag>
+        <description>The deformation field</description>
+      </image>
+    <image type="any">
+       <name>outputVolume</name>
+       <label>Output Volume</label>
+       <channel>output</channel>
+       <index>1</index>
+       <description>Resampled and/or warped volume</description>
+    </image>
+    <boolean>                                                                                                                                                                                                                              
+      <name>resample</name>
+      <label>Resample DWI gradient directions?</label>
+      <longflag>--resample</longflag>
+      <description>Resamples the DWI to have a set of canonical gradient directions</description>
+      <default>false</default>
+    </boolean>
+   <boolean>                                                                                                                                                                                                                              
+      <name>resample_self</name>
+      <label>Resample DWI at its own gradient directions?</label>
+      <longflag>--resample_self</longflag>
+      <description>Resamples the DWI at its own gradient directions</description>
+      <default>false</default>
+    </boolean>
+   <boolean>                                                                                                                                                                                                                              
+      <name>without_baselines</name>
+      <label>Save output image without the baselines?</label>
+      <longflag>--without_baselines</longflag>
+      <description></description>
+      <default>false</default>
+    </boolean>
+
 </parameters>
 
 </executable>
