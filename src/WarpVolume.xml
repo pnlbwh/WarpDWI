@@ -17,25 +17,25 @@
     <label>Input/Output</label>
     <description>Input/Output Parameters</description>
      <image type="any">
-        <name>inputVolume</name>
-        <label>Input Volume</label>
+        <name>input_image</name>
+        <label>Input Image</label>
         <channel>input</channel>
-        <index>0</index>
-        <description>Input Volume to be resampled</description>
+        <longflag>--input</longflag>
+        <description>Image to be resampled or warped</description>
       </image>
      <image type="any">
         <name>warp</name>
-        <label>Warp Volume</label>
+        <label>Warp Image</label>
         <channel>input</channel>
         <longflag>--warp</longflag>
-        <description>The deformation field</description>
+        <description>If warping, this specifies deformation field to use</description>
       </image>
     <image type="any">
-       <name>outputVolume</name>
-       <label>Output Volume</label>
+       <name>output_image</name>
+       <label>Output Image</label>
        <channel>output</channel>
-       <index>1</index>
-       <description>Resampled and/or warped volume</description>
+       <longflag>--output</longflag>
+       <description>Resampled and/or warped image</description>
     </image>
     <boolean>                                                                                                                                                                                                                              
       <name>resample</name>
@@ -55,7 +55,7 @@
       <name>without_baselines</name>
       <label>Save output image without the baselines?</label>
       <longflag>--without_baselines</longflag>
-      <description></description>
+      <description>If resampling, this flag will prevent the baselines from being written to the output image</description>
       <default>false</default>
     </boolean>
 

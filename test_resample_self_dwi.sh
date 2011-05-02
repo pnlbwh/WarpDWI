@@ -1,2 +1,2 @@
 #!/bin/csh
-src/WarpVolume --resample_self /spl_unsupported/pnlfs/reckbo/projects/CreateDWIAtlas/tests/input/01019-Rgd-norm.nhdr resampled_dwi_self.nrrd
+src/WarpVolume --resample_self --input /spl_unsupported/pnlfs/reckbo/projects/CreateDWIAtlas/tests/input/01019-Rgd-norm.nhdr --output resampled_dwi_self.nrrd $*

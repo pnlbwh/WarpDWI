@@ -1,0 +1,4 @@
+Each test_*.sh shell script tests a feature of WarpVolume.  Look at these
+scripts to see what features are available and for examples on how to call them
+from the commandline.  Also, running "WarpVolume --help" will print out a format
+describing its usage.

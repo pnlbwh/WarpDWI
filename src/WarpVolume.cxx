@@ -67,8 +67,8 @@ struct Triangle
 
 struct parameters
 {
-  std::string inputVolume;
-  std::string outputVolume;
+  std::string input_image;
+  std::string output_image;
   std::string warp;
   bool resample;
   bool resample_self;
@@ -494,7 +494,7 @@ unsigned int ComputeSH( parameters args )
 
   /* Read the DWI image to be resampled */
   typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
-  imageReader->SetFileName( args.inputVolume.c_str() );
+  imageReader->SetFileName( args.input_image.c_str() );
   imageReader->Update();
 
   /* Get the gradients and number of baseline images */
@@ -607,7 +607,7 @@ unsigned int ComputeSH( parameters args )
 
   /* Write the resampled DWI */
   typename WriterType::Pointer  writer =  WriterType::New();
-  writer->SetFileName( args.outputVolume.c_str() );
+  writer->SetFileName( args.output_image.c_str() );
   writer->SetInput( outputImage );
   writer->SetUseCompression( true );
   try
@@ -647,7 +647,7 @@ int Warp( parameters &args )
   /* read in input image */
   typedef itk::ImageFileReader< VectorImageType >   ImageReaderType;
   typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
-  imageReader->SetFileName( args.inputVolume.c_str() );
+  imageReader->SetFileName( args.input_image.c_str() );
   imageReader->Update();
 
   /* read in deformation field */
@@ -687,8 +687,8 @@ int Warp( parameters &args )
   //warper->SetOutputDirection( imageReader->GetOutput()->GetDirection() );
 
   typename WriterType::Pointer  writer =  WriterType::New();
-  //writer->SetFileName( WarpedImageName(args.resultsDirectory, args.inputVolume) );
-  writer->SetFileName( args.outputVolume );
+  //writer->SetFileName( WarpedImageName(args.resultsDirectory, args.input_image) );
+  writer->SetFileName( args.output_image );
   writer->SetInput( outputImage );
   //writer->SetInput( imageReader->GetOutput() );
   writer->SetUseCompression( true );
@@ -713,21 +713,24 @@ int main( int argc, char * argv[] )
   PARSE_ARGS;
   parameters args;
   args.warp = warp;
-  args.outputVolume = outputVolume;
-  args.inputVolume = inputVolume;
+  args.output_image = output_image;
+  args.input_image = input_image;
   args.resample = resample;
   args.resample_self = resample_self;
   args.without_baselines = without_baselines;
 
-  std::cout << "warp:" << args.warp << std::endl;
-  std::cout << "input volume:" << args.inputVolume << std::endl;
-  std::cout << "output volume:" << args.outputVolume << std::endl;
-  std::cout << "resample:" << args.resample << std::endl;
-  std::cout << "resample_self:" << args.resample_self << std::endl;
+  /* We don't need to print the parameters out - we can simply pass the flag "--echo" 
+   * to the executable to accomplish the same thing.
+   */
+  //std::cout << "warp:" << args.warp << std::endl;
+  //std::cout << "input volume:" << args.input_image << std::endl;
+  //std::cout << "output volume:" << args.output_image << std::endl;
+  //std::cout << "resample:" << args.resample << std::endl;
+  //std::cout << "resample_self:" << args.resample_self << std::endl;
 
   itk::ImageIOBase::IOPixelType pixelType;
   itk::ImageIOBase::IOComponentType componentType;
-  GetImageType( args.inputVolume , pixelType , componentType );
+  GetImageType( args.input_image , pixelType , componentType );
 
 
   switch( componentType )
