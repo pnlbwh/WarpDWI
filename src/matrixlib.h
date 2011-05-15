@@ -239,6 +239,7 @@ bool operator<(const Vector &v1, const Vector &v2)
     return (v1[1] < v2[1]);
   if ( fabs(v1[2] - v2[2])>itk::NumericTraits<double>::epsilon())
     return (v1[2] < v2[2]);
+  return false;
 }
 bool operator>(const Vector &v1, const Vector &v2)
 {  
@@ -248,4 +249,5 @@ bool operator>(const Vector &v1, const Vector &v2)
     return (v1[1] > v2[1]);
   if ( fabs(v1[2] - v2[2])>itk::NumericTraits<double>::epsilon())
     return (v1[2] > v2[2]);
+  return false;
 }

@@ -18,6 +18,7 @@
 #include "SphericalHarmonicPolynomial.h"
 #include <math.h>
 
+#include "itkBinaryFunctorImageFilter.h"
 //#include "vnl_qr.h"
 
 #include "itkPluginFilterWatcher.h"
@@ -35,6 +36,7 @@
 //#include "mat.h"
 
 #include "matrixlib.h"
+#include "SHFilter.h"
 
 namespace
 {
@@ -98,13 +100,13 @@ void subdivide(vector<Triangle>& triangles, vector<Vector>& vertices)
         triangles.push_back(Triangle(c, v2, v3));
         triangles.push_back(Triangle(b, v3, v1));
 
-       if (std::find(vertices.begin(), vertices.end(), v1) != vertices.end() == false)
+       if ((std::find(vertices.begin(), vertices.end(), v1) != vertices.end()) == false)
          vertices.push_back(v1);
 
-       if (std::find(vertices.begin(), vertices.end(), v2) != vertices.end() == false)
+       if ((std::find(vertices.begin(), vertices.end(), v2) != vertices.end()) == false)
          vertices.push_back(v2);
 
-       if (std::find(vertices.begin(), vertices.end(), v3) != vertices.end() == false)
+       if ((std::find(vertices.begin(), vertices.end(), v3) != vertices.end()) == false)
          vertices.push_back(v3);
     }
 }
@@ -281,45 +283,6 @@ int AddImage( typename itk::VectorImage< PixelType, 3 >
   return EXIT_SUCCESS;
 }
 
-//std::string WarpedImageName(std::string outputDir, std::string filename)
-//{
-  //std::stringstream result;
-  //result << outputDir << "/" << itksys::SystemTools::GetFilenameWithoutExtension(filename) << "_warped.nrrd";
-  //return result.str();
-//}
-
-template< class PixelType>
-vnl_matrix<double> GetSHBasis3(vnl_matrix<double> samples, int L)
-{
-  int numcoeff = (L+1)*(L+2)/2;
-  typedef vnl_matrix<double> MatrixType;
-  MatrixType Y(samples.rows(), numcoeff);
-
-  /* this is the makespharms(u, L) function in Yogesh's Matlab code (/home/yogesh/yogesh_pi/phd/dwmri/fODF_SH/makespharms.m) */
-  typedef neurolib::SphericalHarmonicPolynomial<3> SphericalHarmonicPolynomialType;
-  SphericalHarmonicPolynomialType *sphm = new SphericalHarmonicPolynomialType();
-  for (int i = 0; i < samples.rows(); i++)
-  {
-    double theta = acos( samples(i,2) );
-    double varphi = atan2( samples(i,1), samples(i,0) );
-    if (varphi < 0) 
-      varphi = varphi + 2*M_PI;
-    int coeff_i = 0;
-    Y(i,coeff_i) = sphm->SH(0,0,theta,varphi);
-    coeff_i++;
-    //std::cout << sphm->SH(0,0,theta,varphi) << " ";
-    for (int l = 2; l <=L; l+=2)
-    {
-      for (int m = l; abs(m) <= l; m--)
-      {
-        Y(i,coeff_i) = sphm->SH(l,m,theta,varphi);
-        coeff_i++;
-      }
-    }
-  }
-  std::cout << "num rows of Y is: " << Y.rows() << std::endl;
-  return Y;
-}
 void PrintMatrixRow(vnl_matrix<double> matrix, int row)
 {
   std::cout << "matrix is " << matrix.rows() << " by " << matrix.columns() << std::endl;
@@ -329,6 +292,7 @@ void PrintMatrixRow(vnl_matrix<double> matrix, int row)
   }
   std::cout  << std::endl;
 }
+
 void PrintMatrix(vnl_matrix<double> matrix, int col)
 {
   std::cout << "matrix is " << matrix.rows() << " by " << matrix.columns() << std::endl;
@@ -476,7 +440,6 @@ void PrintVertices(vnl_matrix<double> vertices)
   }
 }
 
-
 template< class PixelType > 
 unsigned int ComputeSH( parameters args )
 {
@@ -489,8 +452,6 @@ unsigned int ComputeSH( parameters args )
 
   typedef vnl_matrix<double> MatrixType;  //hardcoded the type for now because some vnl implementations are limited to just a few (including 'double')
   typedef vnl_vector<double> VectorType;  //hardcoded the type for now because some vnl implementations are limited to just a few (including 'double')
-  const unsigned int L = 8;
-  const unsigned int num_basis_functions = (L+1)*(L+2)/2;
 
   /* Read the DWI image to be resampled */
   typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
@@ -500,7 +461,6 @@ unsigned int ComputeSH( parameters args )
   /* Get the gradients and number of baseline images */
   input_dico = imageReader->GetOutput()->GetMetaDataDictionary(); //save metadata dictionary
   PrintDictionary(input_dico);
-  //MatrixType gradients = GetGradients(input_dico);
   header_struct hdr = GetGradients(input_dico);
   MatrixType gradients = hdr.gradients; 
   unsigned int numberOfBaselineImages = hdr.numberOfBaselineImages;
@@ -508,111 +468,52 @@ unsigned int ComputeSH( parameters args )
   duplicated_gradients.update(gradients, 0, 0);
   duplicated_gradients.update(gradients * -1, gradients.rows(), 0);
 
-  /* Get new sample directions, save them to the output header, and evaluate their SH basis function values */
-  MatrixType newY;
-  if (args.resample_self) //This option is used to test how well the resampling does
-  {
-    newY = GetSHBasis3<double>(gradients, L); 
-    if (args.without_baselines)
-      UpdateMetaDataDictionary(output_dico, input_dico, gradients, 0);
-    else
-      UpdateMetaDataDictionary(output_dico, input_dico, gradients, numberOfBaselineImages);
-  }
-  else
-  {
-    MatrixType vertices = sample_sphere_as_icosahedron(2);
-    newY = GetSHBasis3<double>(vertices, L); 
-    if (args.without_baselines)
-      UpdateMetaDataDictionary(output_dico, input_dico, vertices, 0);
-    else
-      UpdateMetaDataDictionary(output_dico, input_dico, vertices, numberOfBaselineImages);
-  }
+  /* Make a volume of gradients */
+  typedef itk::Image<MatrixType, 3> MatrixImageType;
+  typename MatrixImageType::RegionType region;
+  typename MatrixImageType::IndexType start_index;
+  start_index.Fill(0);
+  region.SetIndex(start_index);
+  region.SetSize(imageReader->GetOutput()->GetLargestPossibleRegion().GetSize());
+  typename MatrixImageType::Pointer gradient_image = MatrixImageType::New();
+  gradient_image->SetRegions(region);
+  gradient_image->Allocate();
+  gradient_image->FillBuffer(duplicated_gradients);
 
-  typename VectorImageType::Pointer outputImage = VectorImageType::New();
-  outputImage->SetRegions( imageReader->GetOutput()->GetLargestPossibleRegion().GetSize() );
-  outputImage->SetOrigin( imageReader->GetOutput()->GetOrigin() );
-  outputImage->SetDirection( imageReader->GetOutput()->GetDirection() );
-  outputImage->SetSpacing( imageReader->GetOutput()->GetSpacing() );
+  /* Get new sample directions */
+  MatrixType vertices = args.resample_self ? gradients : sample_sphere_as_icosahedron(2);
+
+  /* Update output DWI header with new sample directions */
   if (args.without_baselines)
-    outputImage->SetVectorLength( newY.rows() ); 
+    UpdateMetaDataDictionary(output_dico, input_dico, vertices, 0);
   else
-    outputImage->SetVectorLength( newY.rows() + numberOfBaselineImages ); 
-  outputImage->SetMetaDataDictionary(output_dico);
-  outputImage->Allocate();
+    UpdateMetaDataDictionary(output_dico, input_dico, vertices, numberOfBaselineImages);
 
-  //int isNotZero = 0;
-  //MatrixType R(3,3);
-  //mwIndex subs[] = {0, 0, 0, 0, 0};
-  //mwIndex index;
-  //int count = 0;
-
-  /* Compute B, a constant vector with size num_basis_functions. We're going to use this vector when computing the SH projection of the gradient directions below */
-  VectorType r(num_basis_functions );
-  VectorType a(1);
-  a(0) = 1;
-  int end = 0;
-  for (int l = 0; l <= L; l+=2)
+  /* Create the SH filter */
+  typedef itk::SHFilter< VectorImageType > FilterType;
+  typename FilterType::Pointer filter = FilterType::New();
+  filter->SetSamples(vertices);
+  filter->SetInput1(imageReader->GetOutput());
+  filter->SetInput2(gradient_image);
+  if (args.without_baselines)
   {
-    a.set_size(2*l+1);
-    a.fill(l);
-    r.update(a, end); end += a.size(); 
+    filter->GetFunctor().ExcludeBaselineImagesFromOutput();
+    filter->SetOutputLength(vertices.rows());
   }
-  VectorType B = element_product(r, r+1);
-  B = element_product(B,B);
-
-  /* Get the value for each of the (L+1)*(L+2)/2 SH basis functions at each gradient direction */
-  MatrixType Y2 = GetSHBasis3<double>(duplicated_gradients, L);
-
-  /* Perform part of the gradient SH projection computation */ 
-  MatrixType Y2_t = Y2.transpose();
-  MatrixType denominator = Y2_t * Y2;
-  vnl_diag_matrix<double> diag =  vnl_diag_matrix<double>(0.003 * B);
-  denominator = denominator +  diag;
-  denominator = vnl_matrix_inverse<double>( denominator );
-  //denominator = vnl_qr<double>( denominator ).inverse();
-  //denominator = vnl_svd<double>( denominator ).inverse();
-
-  /* do for each voxel */
-  typename itk::ImageRegionIterator< VectorImageType > in( imageReader->GetOutput(),  imageReader->GetOutput()->GetLargestPossibleRegion() );
-  for( in.GoToBegin(); !in.IsAtEnd(); ++in )
+  else
   {
-    /* get S = [data(j,:) data(j,:)], the data vector with twice the size as the number of gradients */
-    typename VectorImageType::IndexType idx = in.GetIndex();
-    itk::VariableLengthVector< double > data = in.Get(); //itk::VariableLengthVector< PixelType > data = in.Get();
-    VectorType S(2*data.GetNumberOfElements()-(2*numberOfBaselineImages)); 
-    for (unsigned int i = numberOfBaselineImages; i < data.GetNumberOfElements(); i++) 
-    {
-      S(i-numberOfBaselineImages) = data.GetElement(i);
-      S(i-2*numberOfBaselineImages+data.GetNumberOfElements()) = data.GetElement(i);
-    }
-
-    /* Compute the SH projection, 'Cs', of this voxel's gradient function onto (L+1)(L+2)/2 basis functions. So 'Cs' is a vector of size (L+1)(L+2)/2. */
-    VectorType Cs = denominator * Y2_t * S;
-    
-    /* Compute the voxel's values at the new sample directions */
-    VectorType sh_coef = newY * Cs;
-
-    /* Save the new values to the output image */ 
-    unsigned int start = 0;
-    if (!args.without_baselines)
-      start = numberOfBaselineImages;
-    itk::VariableLengthVector<double> final_data;
-    final_data.SetSize(start + sh_coef.size());
-    for (int i = 0; i < start; i++)
-      final_data[i] = data.GetElement(i);
-    for (int i = start; i < final_data.GetSize(); i++)
-      final_data[i] = sh_coef[i-start];
-    outputImage->SetPixel(idx, final_data);
+    filter->GetFunctor().IncludeBaselineImagesInOutput();
+    filter->SetOutputLength(vertices.rows() + numberOfBaselineImages);
   }
-
-  /* Write the resampled DWI */
-  typename WriterType::Pointer  writer =  WriterType::New();
-  writer->SetFileName( args.output_image.c_str() );
-  writer->SetInput( outputImage );
-  writer->SetUseCompression( true );
+  filter->GetOutput()->SetMetaDataDictionary(output_dico);
+  typedef itk::ImageFileWriter< VectorImageType >   WriterType2;
+  typename WriterType2::Pointer  writer2 =  WriterType2::New();
+  writer2->SetFileName( args.output_image.c_str() );
+  writer2->SetInput( filter->GetOutput() );
+  writer2->SetUseCompression( true );
   try
   {
-    writer->Update();
+    writer2->Update();
   }
   catch( itk::ExceptionObject& err )
   {
@@ -622,6 +523,7 @@ unsigned int ComputeSH( parameters args )
   }
 
   return 1;
+
 }
 
 template< class PixelType > 
@@ -718,15 +620,6 @@ int main( int argc, char * argv[] )
   args.resample = resample;
   args.resample_self = resample_self;
   args.without_baselines = without_baselines;
-
-  /* We don't need to print the parameters out - we can simply pass the flag "--echo" 
-   * to the executable to accomplish the same thing.
-   */
-  //std::cout << "warp:" << args.warp << std::endl;
-  //std::cout << "input volume:" << args.input_image << std::endl;
-  //std::cout << "output volume:" << args.output_image << std::endl;
-  //std::cout << "resample:" << args.resample << std::endl;
-  //std::cout << "resample_self:" << args.resample_self << std::endl;
 
   itk::ImageIOBase::IOPixelType pixelType;
   itk::ImageIOBase::IOComponentType componentType;
