@@ -19,7 +19,9 @@
 #include <math.h>
 
 #include "itkBinaryFunctorImageFilter.h"
+#include "itkUnaryFunctorImageFilter.h"
 //#include "vnl_qr.h"
+#include "vnl_determinant.h"
 
 #include "itkPluginFilterWatcher.h"
 #include "itkPluginUtilities.h"
@@ -33,7 +35,7 @@
 #include "vtkImageData.h"
 #include "vtkDoubleArray.h"
 
-//#include "mat.h"
+#include "mat.h"
 
 #include "matrixlib.h"
 #include "SHFilter.h"
@@ -440,6 +442,73 @@ void PrintVertices(vnl_matrix<double> vertices)
   }
 }
 
+class RotateFunctor
+{
+  public:
+    RotateFunctor() {}
+    ~RotateFunctor() {}
+
+    void PrintMatrixRow(vnl_matrix<double> matrix, int row) const
+    {
+      //std::cout << "matrix is " << matrix.rows() << " by " << matrix.columns() << std::endl;
+      for (unsigned int i = 0; i < matrix.cols(); i ++)
+      {
+        std::cout << matrix(row, i) << " ";
+      }
+      std::cout  << std::endl;
+      cout.flush();
+    }
+
+    bool operator!=( const RotateFunctor & ) const
+    {
+      return false;
+    }
+    bool operator==( const RotateFunctor & other ) const
+    {
+      return !(*this != other);
+    }
+
+    inline vnl_matrix<double> operator() (const vnl_matrix<double> & gradient_matrix, const vnl_matrix<double> & rotation_matrix) const
+    {
+      //this->PrintMatrixRow(gradient_matrix, 0);
+      //this->PrintMatrixRow(gradient_matrix, 1);
+      //this->PrintMatrixRow(gradient_matrix, 2);
+      //std::cout << "--->" << std::endl;
+      //this->PrintMatrixRow(gradient_matrix*rotation_matrix, 0);
+      //this->PrintMatrixRow(gradient_matrix*rotation_matrix, 1);
+      //this->PrintMatrixRow(gradient_matrix*rotation_matrix, 2);
+      //return gradient_matrix * rotation_matrix;
+      vnl_matrix<double> new_gradients = gradient_matrix * rotation_matrix;
+      /* normalize rows */
+      typedef vnl_numeric_traits<double>::abs_t abs_t;
+      for (unsigned int i=0; i<new_gradients.rows(); ++i) 
+      {
+        //double rn = new_gradients.get_row(i).rms();
+        double rn = sqrt(new_gradients(i,0)*new_gradients(i,0) + new_gradients(i,1)*new_gradients(i,1) + new_gradients(i,2)*new_gradients(i,2));
+        if (rn > 0) 
+        {
+          for (unsigned int j=0; j<new_gradients.cols(); ++j)
+            new_gradients(i,j) = new_gradients(i,j)/rn;
+        }
+        //assert( fabs(new_gradients.get_row(i).rms() - 1.0) < itk::NumericTraits<double>::epsilon() );
+        //assert( fabs(new_gradients(i,0)) < 1.0 && fabs(new_gradients(i,1)) < 1.0 && fabs(new_gradients(i,2)) < 1.0 );
+        if( fabs(new_gradients(i,0)) > 1.0 || fabs(new_gradients(i,1)) > 1.0 || fabs(new_gradients(i,2)) > 1.0 )
+        {
+          std::cout << "rn: " << rn << ", rms: " << new_gradients.get_row(i).rms() << ", " << new_gradients.get_row(i) << std::endl; 
+          cout.flush();
+        }
+
+        //if( fabs(new_gradients.get_row(i).rms() - 1.0) > 3*itk::NumericTraits<double>::epsilon() )
+        //{
+          //std::cout << "size of gradient row is " << new_gradients.get_row(i).rms()  << std::endl;
+          //cout.flush();
+        //}
+
+      }
+      return new_gradients;
+    }
+};
+
 template< class PixelType > 
 unsigned int ComputeSH( parameters args )
 {
@@ -479,6 +548,64 @@ unsigned int ComputeSH( parameters args )
   gradient_image->SetRegions(region);
   gradient_image->Allocate();
   gradient_image->FillBuffer(duplicated_gradients);
+  /* read in rotation matrix */
+  MATFile *mfile = matOpen("/spl_unsupported/pnlfs/reckbo/projects/CreateDWIAtlas/tests/input/01019-Rgd-fa-Rotation.mat", "r");
+  mxArray *rotations = matGetVariable(mfile, "R");
+  mxArray *dJ = matGetVariable(mfile, "dJ"); 
+  //mwSize num_new_dims = 3;
+  //mwSize new_dims[] = {3, 3, 1762560};
+  //mxSetDimensions(rotations, new_dims, num_new_dims);
+  double *rot = mxGetPr(rotations);
+  double *dJ_ptr = mxGetPr(dJ);
+  typename MatrixImageType::RegionType region2;
+  typename MatrixImageType::IndexType start_index2;
+  start_index2.Fill(0);
+  region2.SetIndex(start_index2);
+  region2.SetSize(imageReader->GetOutput()->GetLargestPossibleRegion().GetSize());
+  typename MatrixImageType::Pointer rotation_image = MatrixImageType::New();
+  rotation_image->SetRegions(region2);
+  rotation_image->Allocate();
+  typename itk::ImageRegionIterator< MatrixImageType > in( rotation_image,  rotation_image->GetLargestPossibleRegion() );
+  MatrixType R(3,3);
+  mwIndex subs[] = {0, 0, 0, 0, 0};
+  mwIndex index;
+  mwSize num_dims = 5;
+  for( in.GoToBegin(); !in.IsAtEnd(); ++in )
+  {
+    typename MatrixImageType::IndexType idx = in.GetIndex();
+    for (int i = 0; i < 3; i++)
+    {
+      for (int j = 0; j < 3; j++)
+      {
+        subs[0] = i;
+        subs[1] = j;
+        subs[2] = idx[0];
+        subs[3] = idx[1];
+        subs[4] = idx[2];
+        index = mxCalcSingleSubscript(rotations, num_dims, subs);
+        R(i,j) = rot[index];
+      }
+    }
+    if (vnl_determinant<double>(R) < 0 || dJ_ptr[index] < 0.01)
+    {
+      R.set_identity();
+    }
+
+    in.Set(R);
+    //PrintMatrixRow(R, 0);
+    //PrintMatrixRow(R, 1);
+    //PrintMatrixRow(R, 2);
+    //std::cout << "---" << std::endl;
+    //cout.flush();
+  }
+
+  typedef itk::BinaryFunctorImageFilter< MatrixImageType, MatrixImageType, MatrixImageType, RotateFunctor > RotateFilterType;
+  typename RotateFilterType::Pointer rotate_filter = RotateFilterType::New();
+  rotate_filter->SetInput1(gradient_image);
+  rotate_filter->SetInput2(rotation_image);
+  /*debug*/
+  //rotate_filter->Update();
+  /*debug*/
 
   /* Get new sample directions */
   MatrixType vertices = args.resample_self ? gradients : sample_sphere_as_icosahedron(2);
@@ -494,7 +621,7 @@ unsigned int ComputeSH( parameters args )
   typename FilterType::Pointer filter = FilterType::New();
   filter->SetSamples(vertices);
   filter->SetInput1(imageReader->GetOutput());
-  filter->SetInput2(gradient_image);
+  filter->SetInput2(rotate_filter->GetOutput());
   if (args.without_baselines)
   {
     filter->GetFunctor().ExcludeBaselineImagesFromOutput();
