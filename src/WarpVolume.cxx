@@ -14,6 +14,8 @@
 #include "itkImageFileReader.h"
 #include "itkImageFileWriter.h"
 
+#include "itkExtractRotationsFilter.h"
+
 #include "itkMultivariateLegendrePolynomial.h"
 #include "SphericalHarmonicPolynomial.h"
 #include <math.h>
@@ -548,63 +550,81 @@ unsigned int ComputeSH( parameters args )
   gradient_image->SetRegions(region);
   gradient_image->Allocate();
   gradient_image->FillBuffer(duplicated_gradients);
-  /* read in rotation matrix */
-  MATFile *mfile = matOpen("/spl_unsupported/pnlfs/reckbo/projects/CreateDWIAtlas/tests/input/01019-Rgd-fa-Rotation.mat", "r");
-  mxArray *rotations = matGetVariable(mfile, "R");
-  mxArray *dJ = matGetVariable(mfile, "dJ"); 
-  //mwSize num_new_dims = 3;
-  //mwSize new_dims[] = {3, 3, 1762560};
-  //mxSetDimensions(rotations, new_dims, num_new_dims);
-  double *rot = mxGetPr(rotations);
-  double *dJ_ptr = mxGetPr(dJ);
-  typename MatrixImageType::RegionType region2;
-  typename MatrixImageType::IndexType start_index2;
-  start_index2.Fill(0);
-  region2.SetIndex(start_index2);
-  region2.SetSize(imageReader->GetOutput()->GetLargestPossibleRegion().GetSize());
-  typename MatrixImageType::Pointer rotation_image = MatrixImageType::New();
-  rotation_image->SetRegions(region2);
-  rotation_image->Allocate();
-  typename itk::ImageRegionIterator< MatrixImageType > in( rotation_image,  rotation_image->GetLargestPossibleRegion() );
-  MatrixType R(3,3);
-  mwIndex subs[] = {0, 0, 0, 0, 0};
-  mwIndex index;
-  mwSize num_dims = 5;
-  for( in.GoToBegin(); !in.IsAtEnd(); ++in )
-  {
-    typename MatrixImageType::IndexType idx = in.GetIndex();
-    for (int i = 0; i < 3; i++)
-    {
-      for (int j = 0; j < 3; j++)
-      {
-        subs[0] = i;
-        subs[1] = j;
-        subs[2] = idx[0];
-        subs[3] = idx[1];
-        subs[4] = idx[2];
-        index = mxCalcSingleSubscript(rotations, num_dims, subs);
-        R(i,j) = rot[index];
-      }
-    }
-    if (vnl_determinant<double>(R) < 0 || dJ_ptr[index] < 0.01)
-    {
-      R.set_identity();
-    }
 
-    in.Set(R);
-    //PrintMatrixRow(R, 0);
-    //PrintMatrixRow(R, 1);
-    //PrintMatrixRow(R, 2);
-    //std::cout << "---" << std::endl;
-    //cout.flush();
-  }
+  /* read in rotation matrix */
+ /* MATFile *mfile = matOpen("/spl_unsupported/pnlfs/reckbo/projects/CreateDWIAtlas/tests/input/01019-Rgd-fa-Rotation.mat", "r");*/
+  //mxArray *rotations = matGetVariable(mfile, "R");
+  //mxArray *dJ = matGetVariable(mfile, "dJ"); 
+  ////mwSize num_new_dims = 3;
+  ////mwSize new_dims[] = {3, 3, 1762560};
+  ////mxSetDimensions(rotations, new_dims, num_new_dims);
+  //double *rot = mxGetPr(rotations);
+  //double *dJ_ptr = mxGetPr(dJ);
+  //typename MatrixImageType::RegionType region2;
+  //typename MatrixImageType::IndexType start_index2;
+  //start_index2.Fill(0);
+  //region2.SetIndex(start_index2);
+  //region2.SetSize(imageReader->GetOutput()->GetLargestPossibleRegion().GetSize());
+  //typename MatrixImageType::Pointer rotation_image = MatrixImageType::New();
+  //rotation_image->SetRegions(region2);
+  //rotation_image->Allocate();
+  //typename itk::ImageRegionIterator< MatrixImageType > in( rotation_image,  rotation_image->GetLargestPossibleRegion() );
+  //MatrixType R(3,3);
+  //mwIndex subs[] = {0, 0, 0, 0, 0};
+  //mwIndex index;
+  //mwSize num_dims = 5;
+  //for( in.GoToBegin(); !in.IsAtEnd(); ++in )
+  //{
+    //typename MatrixImageType::IndexType idx = in.GetIndex();
+    //for (int i = 0; i < 3; i++)
+    //{
+      //for (int j = 0; j < 3; j++)
+      //{
+        //subs[0] = i;
+        //subs[1] = j;
+        //subs[2] = idx[0];
+        //subs[3] = idx[1];
+        //subs[4] = idx[2];
+        //index = mxCalcSingleSubscript(rotations, num_dims, subs);
+        //R(i,j) = rot[index];
+      //}
+    //}
+    //if (vnl_determinant<double>(R) < 0 || dJ_ptr[index] < 0.01)
+    //{
+      //R.set_identity();
+    //}
+
+    //in.Set(R);
+    ////PrintMatrixRow(R, 0);
+    ////PrintMatrixRow(R, 1);
+    ////PrintMatrixRow(R, 2);
+    ////std::cout << "---" << std::endl;
+    ////cout.flush();
+ /* }*/
+
+  /* Compute rotations */
+  typedef itk::Vector<float, Dimension>  VectorPixelType;
+  //typedef itk::Image< PixelType, Dimension >  ImageType;
+  typedef itk::OrientedImage< PixelType , Dimension > ImageType;
+  typedef itk::Image<VectorPixelType, Dimension>  DeformationFieldType;
+  typedef itk::ExtractRotationsFilter< DeformationFieldType, double> ExtractRotationsFilterType; 
+  typedef itk::ImageFileReader< DeformationFieldType >    DeformationReaderType;
+  DeformationReaderType::Pointer  fieldReader = DeformationReaderType::New();
+  fieldReader->SetFileName( args.warp.c_str() );
+  fieldReader->Update();
+  ExtractRotationsFilterType::Pointer rotations_filter = ExtractRotationsFilterType::New();
+  rotations_filter->SetInput(fieldReader->GetOutput());
+  //rotations_filter->Update();
+  rotations_filter->UpdateLargestPossibleRegion();
 
   typedef itk::BinaryFunctorImageFilter< MatrixImageType, MatrixImageType, MatrixImageType, RotateFunctor > RotateFilterType;
   typename RotateFilterType::Pointer rotate_filter = RotateFilterType::New();
   rotate_filter->SetInput1(gradient_image);
-  rotate_filter->SetInput2(rotation_image);
+  //rotate_filter->SetInput2(rotation_image);
+  rotate_filter->SetInput2(rotations_filter->GetOutput());
   /*debug*/
   //rotate_filter->Update();
+  //exit(1);
   /*debug*/
 
   /* Get new sample directions */
@@ -678,29 +698,38 @@ int Warp( parameters &args )
   typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
   imageReader->SetFileName( args.input_image.c_str() );
   imageReader->Update();
+  itk::MetaDataDictionary input_dico = imageReader->GetOutput()->GetMetaDataDictionary();
 
   /* read in deformation field */
   DeformationReaderType::Pointer  fieldReader = DeformationReaderType::New();
   fieldReader->SetFileName( args.warp.c_str() );
   fieldReader->Update();
 
+  /* separate into a vector */
+  std::vector< typename ImageType::Pointer > vectorImage;
+  std::vector< typename ImageType::Pointer > vectorOutputImage ;
+  SeparateImages< PixelType >( imageReader->GetOutput() , vectorImage ) ;
+
+  /* debug */
+  /* If DWI, resample the gradient directions */
+  //if (vectorImage.size() > 1)
+  //{
+    //std::cout << "Resampling the warped DWI" << std::endl;
+    //return ComputeSH<PixelType>(args);
+  //}
+  /* debug */
+
   /* warp the image */
   typename WarperType::Pointer   warper = WarperType::New();
   warper->SetDeformationField( fieldReader->GetOutput() );
-
-  /* separate into a vector */
-  std::vector< typename ImageType::Pointer > vectorOutputImage ;
-  std::vector< typename ImageType::Pointer > vectorOfImage;
-  SeparateImages< PixelType >( imageReader->GetOutput() , vectorOfImage ) ;
-
-  for( ::size_t i = 0; i < vectorOfImage.size(); i++ )
+  for( ::size_t i = 0; i < vectorImage.size(); i++ )
   {
-    std::cout << "number of components: " << vectorOfImage.size() << ", iteration: " << i <<  std::endl;
-    warper->SetInput( vectorOfImage[i] );
-    warper->SetOutputSpacing( vectorOfImage[i]->GetSpacing() );
-    warper->SetOutputOrigin( vectorOfImage[i]->GetOrigin() );
-    warper->SetOutputDirection( vectorOfImage[i]->GetDirection() );
-    warper->SetOutputSize( vectorOfImage[i]->GetLargestPossibleRegion().GetSize() );
+    std::cout << "number of components: " << vectorImage.size() << ", iteration: " << i <<  std::endl;
+    warper->SetInput( vectorImage[i] );
+    warper->SetOutputSpacing( vectorImage[i]->GetSpacing() );
+    warper->SetOutputOrigin( vectorImage[i]->GetOrigin() );
+    warper->SetOutputDirection( vectorImage[i]->GetDirection() );
+    warper->SetOutputSize( vectorImage[i]->GetLargestPossibleRegion().GetSize() );
     warper->Update();
     vectorOutputImage.push_back( warper->GetOutput() );
     vectorOutputImage[i]->DisconnectPipeline();
@@ -709,6 +738,7 @@ int Warp( parameters &args )
   typename itk::VectorImage< PixelType, 3 >::Pointer outputImage = itk::VectorImage< PixelType , 3 >::New() ;
   AddImage< PixelType >( outputImage , vectorOutputImage ) ;
   vectorOutputImage.clear() ;
+  outputImage->SetMetaDataDictionary(input_dico);
 
   //warper->SetInput( imageReader->GetOutput() );
   //warper->SetOutputSpacing( imageReader->GetOutput()->GetSpacing() );
@@ -716,10 +746,8 @@ int Warp( parameters &args )
   //warper->SetOutputDirection( imageReader->GetOutput()->GetDirection() );
 
   typename WriterType::Pointer  writer =  WriterType::New();
-  //writer->SetFileName( WarpedImageName(args.resultsDirectory, args.input_image) );
   writer->SetFileName( args.output_image );
   writer->SetInput( outputImage );
-  //writer->SetInput( imageReader->GetOutput() );
   writer->SetUseCompression( true );
   try
   {
@@ -730,6 +758,14 @@ int Warp( parameters &args )
     std::cout << "Could not write warped image" << std::endl;
     std::cout << err << std::endl;
     exit( EXIT_FAILURE );
+  }
+
+  /* If DWI, resample the gradient directions */
+  if (vectorImage.size() > 1)
+  {
+    std::cout << "Resampling the warped DWI" << std::endl;
+    args.input_image = args.output_image;
+    return ComputeSH<PixelType>(args);
   }
 
   return EXIT_SUCCESS;
