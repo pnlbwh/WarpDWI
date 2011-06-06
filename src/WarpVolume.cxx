@@ -676,7 +676,8 @@ unsigned int ComputeSH( parameters args )
 template< class PixelType > 
 int Warp( parameters &args )
 {
-  if (args.resample || args.resample_self)
+  //if (args.resample || args.resample_self)
+  if ( args.warp.empty() && (args.resample || args.resample_self) ) 
   {
     return ComputeSH<PixelType>(args);
   }
