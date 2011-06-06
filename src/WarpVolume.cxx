@@ -669,7 +669,7 @@ unsigned int ComputeSH( parameters args )
     exit( EXIT_FAILURE );
   }
 
-  return 1;
+  return EXIT_SUCCESS;
 
 }
 
