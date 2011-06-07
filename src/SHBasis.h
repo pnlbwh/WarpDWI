@@ -1,5 +1,5 @@
 template< class PixelType>
-vnl_matrix<double> GetSHBasis3(vnl_matrix<double> samples, int L)
+vnl_matrix<double> GetSHBasis(vnl_matrix<double> samples, int L)
 {
   int numcoeff = (L+1)*(L+2)/2;
   typedef vnl_matrix<double> MatrixType;
@@ -12,6 +12,12 @@ vnl_matrix<double> GetSHBasis3(vnl_matrix<double> samples, int L)
   {
     double theta = acos( samples(i,2) );
     double varphi = atan2( samples(i,1), samples(i,0) );
+    if (theta != theta)
+    {
+      std::cout << "sample that fails theta: " << samples(i,2) << std::endl;
+    }
+    assert(varphi == varphi);
+
     if (varphi < 0) 
       varphi = varphi + 2*M_PI;
     int coeff_i = 0;

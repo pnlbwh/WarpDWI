@@ -1,5 +1,6 @@
 #include "itkBinaryFunctorImageFilter.h"
 #include "SHBasis.h"
+#include "vnl_qr.h"
 
 namespace itk
 {
@@ -63,16 +64,20 @@ namespace Function
             S(i-numberOfBaselineImages) = data.GetElement(i);
             S(i-2*numberOfBaselineImages+data.GetNumberOfElements()) = data.GetElement(i);
           }
+          for (unsigned int i = 0; i < duplicated_gradients.rows(); i++)
+            for (unsigned int j = 0; j < duplicated_gradients.cols(); j++)
+              assert(duplicated_gradients(i,j) == duplicated_gradients(i,j));
           /* Get the value for each of the (L+1)*(L+2)/2 SH basis functions at each gradient direction */
-          MatrixType Y2 = GetSHBasis3<double>(duplicated_gradients, L);
+          MatrixType Y = GetSHBasis<double>(duplicated_gradients, L);
           /* Perform part of the gradient SH projection computation */ 
-          MatrixType Y2_t = Y2.transpose();
-          MatrixType denominator = Y2_t * Y2;
+          MatrixType Y_t = Y.transpose();
+          MatrixType denominator = Y_t * Y;
           vnl_diag_matrix<double> diag =  vnl_diag_matrix<double>(0.003 * B);
           denominator = denominator +  diag;
           denominator = vnl_matrix_inverse<double>( denominator );
+          //denominator = vnl_qr<double>( denominator ).inverse();
           /* Compute the SH projection, 'Cs', of this voxel's gradient function onto (L+1)(L+2)/2 basis functions. So 'Cs' is a vector of size (L+1)(L+2)/2. */
-          VectorType Cs = denominator * Y2_t * S;
+          VectorType Cs = denominator * Y_t * S;
           /* Compute the voxel's values at the new sample directions */
           VectorType sh_coef = newY * Cs;
           /* Save the new values to the output image */ 
@@ -82,9 +87,13 @@ namespace Function
             start = numberOfBaselineImages;
           final_data.SetSize(start + sh_coef.size());
           for (unsigned int i = 0; i < start; i++)
+          {
             final_data[i] = data.GetElement(i);
+          }
           for (unsigned int i = start; i < final_data.GetSize(); i++)
+          {
             final_data[i] = sh_coef[i-start];
+          }
 
           return final_data;
         }
@@ -113,7 +122,7 @@ template< typename TInputImage1, typename TOutputImage = TInputImage1, int L=8>
 
     void SetSamples(vnl_matrix<double> samples)
     {
-      vnl_matrix<double> newY = GetSHBasis3<double>(samples, L); 
+      vnl_matrix<double> newY = GetSHBasis<double>(samples, L); 
       this->GetFunctor().SetNewY(newY);
     }
     
