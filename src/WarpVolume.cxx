@@ -444,11 +444,11 @@ void PrintVertices(vnl_matrix<double> vertices)
   }
 }
 
-class RotateFunctor
+class RotateGradientsFunctor
 {
   public:
-    RotateFunctor() {}
-    ~RotateFunctor() {}
+    RotateGradientsFunctor() {}
+    ~RotateGradientsFunctor() {}
 
     void PrintMatrixRow(vnl_matrix<double> matrix, int row) const
     {
@@ -461,11 +461,11 @@ class RotateFunctor
       cout.flush();
     }
 
-    bool operator!=( const RotateFunctor & ) const
+    bool operator!=( const RotateGradientsFunctor & ) const
     {
       return false;
     }
-    bool operator==( const RotateFunctor & other ) const
+    bool operator==( const RotateGradientsFunctor & other ) const
     {
       return !(*this != other);
     }
@@ -516,7 +516,7 @@ unsigned int ComputeSH( parameters args )
 {
   const unsigned int Dimension = 3;
   typedef itk::VectorImage< PixelType , Dimension > VectorImageType;
-  typedef itk::ImageFileReader< VectorImageType >   ImageReaderType;
+  typedef itk::ImageFileReader< VectorImageType >   DWIReaderType;
   typedef itk::ImageFileWriter< VectorImageType >   WriterType;
   itk::MetaDataDictionary input_dico;
   itk::MetaDataDictionary output_dico;
@@ -525,12 +525,12 @@ unsigned int ComputeSH( parameters args )
   typedef vnl_vector<double> VectorType;  //hardcoded the type for now because some vnl implementations are limited to just a few (including 'double')
 
   /* Read the DWI image to be resampled */
-  typename ImageReaderType::Pointer imageReader = ImageReaderType::New();
-  imageReader->SetFileName( args.input_image.c_str() );
-  imageReader->Update();
+  typename DWIReaderType::Pointer dwiReader = DWIReaderType::New();
+  dwiReader->SetFileName( args.input_image.c_str() );
+  dwiReader->Update();
 
   /* Get the gradients and number of baseline images */
-  input_dico = imageReader->GetOutput()->GetMetaDataDictionary(); //save metadata dictionary
+  input_dico = dwiReader->GetOutput()->GetMetaDataDictionary(); //save metadata dictionary
   PrintDictionary(input_dico);
   header_struct hdr = GetGradients(input_dico);
   MatrixType gradients = hdr.gradients; 
@@ -545,7 +545,7 @@ unsigned int ComputeSH( parameters args )
   typename MatrixImageType::IndexType start_index;
   start_index.Fill(0);
   region.SetIndex(start_index);
-  region.SetSize(imageReader->GetOutput()->GetLargestPossibleRegion().GetSize());
+  region.SetSize(dwiReader->GetOutput()->GetLargestPossibleRegion().GetSize());
   typename MatrixImageType::Pointer gradient_image = MatrixImageType::New();
   gradient_image->SetRegions(region);
   gradient_image->Allocate();
@@ -564,7 +564,7 @@ unsigned int ComputeSH( parameters args )
   //typename MatrixImageType::IndexType start_index2;
   //start_index2.Fill(0);
   //region2.SetIndex(start_index2);
-  //region2.SetSize(imageReader->GetOutput()->GetLargestPossibleRegion().GetSize());
+  //region2.SetSize(dwiReader->GetOutput()->GetLargestPossibleRegion().GetSize());
   //typename MatrixImageType::Pointer rotation_image = MatrixImageType::New();
   //rotation_image->SetRegions(region2);
   //rotation_image->Allocate();
@@ -603,29 +603,28 @@ unsigned int ComputeSH( parameters args )
  /* }*/
 
   /* Compute rotations */
-  typedef itk::Vector<float, Dimension>  VectorPixelType;
-  //typedef itk::Image< PixelType, Dimension >  ImageType;
-  typedef itk::OrientedImage< PixelType , Dimension > ImageType;
-  typedef itk::Image<VectorPixelType, Dimension>  DeformationFieldType;
-  typedef itk::ExtractRotationsFilter< DeformationFieldType, double> ExtractRotationsFilterType; 
-  typedef itk::ImageFileReader< DeformationFieldType >    DeformationReaderType;
-  DeformationReaderType::Pointer  fieldReader = DeformationReaderType::New();
-  fieldReader->SetFileName( args.warp.c_str() );
-  fieldReader->Update();
-  ExtractRotationsFilterType::Pointer rotations_filter = ExtractRotationsFilterType::New();
-  rotations_filter->SetInput(fieldReader->GetOutput());
-  //rotations_filter->Update();
-  rotations_filter->UpdateLargestPossibleRegion();
+  typedef itk::BinaryFunctorImageFilter< MatrixImageType, MatrixImageType, MatrixImageType, RotateGradientsFunctor > RotateGradientsFilterType;
+  typename RotateGradientsFilterType::Pointer rotate_gradients_filter;
+  if (!args.warp.empty())
+  {
+    //typedef itk::Image< PixelType, Dimension >  ImageType;
+    typedef itk::Vector<float, Dimension>  VectorPixelType;
+    typedef itk::Image<VectorPixelType, Dimension>  DeformationFieldType;
+    typedef itk::OrientedImage< PixelType , Dimension > ImageType;
+    typedef itk::ImageFileReader< DeformationFieldType >    DeformationReaderType;
+    DeformationReaderType::Pointer  fieldReader = DeformationReaderType::New();
+    fieldReader->SetFileName( args.warp.c_str() );
+    fieldReader->Update();
+    typedef itk::ExtractRotationsFilter< DeformationFieldType, double> ExtractRotationsFilterType; 
+    ExtractRotationsFilterType::Pointer rotations_from_warp_filter;
+    rotations_from_warp_filter = ExtractRotationsFilterType::New();
+    rotations_from_warp_filter->SetInput(fieldReader->GetOutput());
+    rotations_from_warp_filter->UpdateLargestPossibleRegion();
 
-  typedef itk::BinaryFunctorImageFilter< MatrixImageType, MatrixImageType, MatrixImageType, RotateFunctor > RotateFilterType;
-  typename RotateFilterType::Pointer rotate_filter = RotateFilterType::New();
-  rotate_filter->SetInput1(gradient_image);
-  //rotate_filter->SetInput2(rotation_image);
-  rotate_filter->SetInput2(rotations_filter->GetOutput());
-  /*debug*/
-  //rotate_filter->Update();
-  //exit(1);
-  /*debug*/
+    rotate_gradients_filter = RotateGradientsFilterType::New();
+    rotate_gradients_filter->SetInput1(gradient_image);
+    rotate_gradients_filter->SetInput2(rotations_from_warp_filter->GetOutput());
+  }
 
   /* Get new sample directions */
   MatrixType vertices = args.resample_self ? gradients : sample_sphere_as_icosahedron(2);
@@ -637,26 +636,33 @@ unsigned int ComputeSH( parameters args )
     UpdateMetaDataDictionary(output_dico, input_dico, vertices, numberOfBaselineImages);
 
   /* Create the SH filter */
-  typedef itk::SHFilter< VectorImageType > FilterType;
-  typename FilterType::Pointer filter = FilterType::New();
-  filter->SetSamples(vertices);
-  filter->SetInput1(imageReader->GetOutput());
-  filter->SetInput2(rotate_filter->GetOutput());
-  if (args.without_baselines)
+  typedef itk::SHFilter< VectorImageType > SHFilterType;
+  typename SHFilterType::Pointer shfilter = SHFilterType::New();
+  shfilter->SetSamples(vertices);
+  shfilter->SetInput1(dwiReader->GetOutput());
+  if (!args.warp.empty())
   {
-    filter->GetFunctor().ExcludeBaselineImagesFromOutput();
-    filter->SetOutputLength(vertices.rows());
+    shfilter->SetInput2(rotate_gradients_filter->GetOutput());
   }
   else
   {
-    filter->GetFunctor().IncludeBaselineImagesInOutput();
-    filter->SetOutputLength(vertices.rows() + numberOfBaselineImages);
+    shfilter->SetInput2(gradient_image);
   }
-  filter->GetOutput()->SetMetaDataDictionary(output_dico);
+  if (args.without_baselines)
+  {
+    shfilter->GetFunctor().ExcludeBaselineImagesFromOutput();
+    shfilter->SetOutputLength(vertices.rows());
+  }
+  else
+  {
+    shfilter->GetFunctor().IncludeBaselineImagesInOutput();
+    shfilter->SetOutputLength(vertices.rows() + numberOfBaselineImages);
+  }
+  shfilter->GetOutput()->SetMetaDataDictionary(output_dico);
   typedef itk::ImageFileWriter< VectorImageType >   WriterType2;
   typename WriterType2::Pointer  writer2 =  WriterType2::New();
   writer2->SetFileName( args.output_image.c_str() );
-  writer2->SetInput( filter->GetOutput() );
+  writer2->SetInput( shfilter->GetOutput() );
   writer2->SetUseCompression( true );
   try
   {

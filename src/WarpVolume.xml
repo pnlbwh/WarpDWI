@@ -39,16 +39,16 @@
     </image>
     <boolean>                                                                                                                                                                                                                              
       <name>resample</name>
-      <label>Resample DWI gradient directions?</label>
+      <label>Resample DWI at canonical gradient directions?</label>
       <longflag>--resample</longflag>
       <description>Resamples the DWI to have a set of canonical gradient directions</description>
       <default>false</default>
     </boolean>
    <boolean>                                                                                                                                                                                                                              
       <name>resample_self</name>
-      <label>Resample DWI at its own gradient directions?</label>
+      <label>Resample DWI at its original gradient directions?</label>
       <longflag>--resample_self</longflag>
-      <description>Resamples the DWI at its own gradient directions</description>
+      <description>Resamples the DWI at original gradient directions</description>
       <default>false</default>
     </boolean>
    <boolean>                                                                                                                                                                                                                              
@@ -58,7 +58,6 @@
       <description>If resampling, this flag will prevent the baselines from being written to the output image</description>
       <default>false</default>
     </boolean>
-
 </parameters>
 
 </executable>
