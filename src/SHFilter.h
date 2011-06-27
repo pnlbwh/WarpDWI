@@ -1,6 +1,6 @@
 #include "itkBinaryFunctorImageFilter.h"
 #include "SHBasis.h"
-#include "vnl_qr.h"
+//#include "vnl_qr.h"
 
 namespace itk
 {

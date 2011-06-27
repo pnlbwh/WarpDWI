@@ -7,30 +7,19 @@ include(${Slicer3_USE_FILE})
 
 slicer3_set_default_install_prefix_for_external_projects()
 
-#find_package(GenerateCLP REQUIRED)
-#if(GenerateCLP_FOUND)
-  #include(${GenerateCLP_USE_FILE})
-#endif(GenerateCLP_FOUND)
-#find_package(ITK REQUIRED)
-#include(${ITK_USE_FILE})
-
-link_directories(${ModuleDescriptionParser_BINARY_DIR} "/local/os/pkg/matlab-R2010a/bin/glnxa64")
+link_directories(${ModuleDescriptionParser_BINARY_DIR})
 include_directories( ${SlicerBaseCLI_BINARY_DIR} ${SlicerBaseCLI_SOURCE_DIR} )
-include_directories( "/local/os/pkg/matlab-R2010a/extern/include" )
-include_directories( "/projects/schiz/software/Slicer3_forExternalLinking/Slicer3-lib/Insight/Utilities/vxl/core/vnl/algo")
-#include_directories( . )
+include_directories(
+  ${Slicer3_Libs_INCLUDE_DIRS} 
+  ${Slicer3_Base_INCLUDE_DIRS}
+  )
 
 #####################
 
 set (CLP WarpVolume)
-
 set (${CLP}_SOURCE ${CLP}.cxx)
 
-#if (Slicer3_SOURCE_DIR)
-  #generateclp(${CLP}_SOURCE ${CLP}.xml ${Slicer3_SOURCE_DIR}/Resources/NAMICLogo.h)
-#else
 generateclp(${CLP}_SOURCE ${CLP}.xml)
-#endif (Slicer3_SOURCE_DIR)
 
 add_executable(${CLP} ${${CLP}_SOURCE})
 #slicer3_set_plugins_output_path(${CLP})
@@ -41,8 +30,6 @@ target_link_libraries (${CLP}
   MRML
   vtkTeem
   vtkCommon
-  mat
-  mx
   )
 
 #add_library(${CLP}Lib SHARED ${${CLP}_SOURCE})

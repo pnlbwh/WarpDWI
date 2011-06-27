@@ -22,8 +22,6 @@
 
 #include "itkBinaryFunctorImageFilter.h"
 #include "itkUnaryFunctorImageFilter.h"
-//#include "vnl_qr.h"
-#include "vnl_determinant.h"
 
 #include "itkPluginFilterWatcher.h"
 #include "itkPluginUtilities.h"
@@ -37,7 +35,7 @@
 #include "vtkImageData.h"
 #include "vtkDoubleArray.h"
 
-#include "mat.h"
+//#include "mat.h"
 
 #include "matrixlib.h"
 #include "SHFilter.h"
