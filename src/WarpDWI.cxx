@@ -1,4 +1,4 @@
-#include "WarpVolumeCLP.h"
+#include "WarpDWICLP.h"
 #include <itkImage.h>
 #include <itkOrientedImage.h>
 #include <itkImageIOBase.h>
@@ -576,13 +576,15 @@ unsigned int ComputeSH( parameters args )
 
   /* Get new sample directions */
   MatrixType vertices;
-  if (args.resample.compare("original"))
+  if (args.resample.compare("original") == 0)
   {
     vertices = gradients;
+    std::cout << "Resampling at gradients" << std::endl;
   }
   else
   {
     vertices = sample_sphere_as_icosahedron(2);
+    std::cout << "Resampling at canonical set of directions" << std::endl;
   }
 
   /* Update output DWI header with new sample directions */

@@ -1,4 +1,4 @@
-project( WarpVolume )
+project( WarpDWI )
 
 cmake_minimum_required(VERSION 2.6)
 
@@ -16,7 +16,7 @@ include_directories(
 
 #####################
 
-set (CLP WarpVolume)
+set (CLP WarpDWI)
 set (${CLP}_SOURCE ${CLP}.cxx)
 
 generateclp(${CLP}_SOURCE ${CLP}.xml)

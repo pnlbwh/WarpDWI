@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <executable>
-  <category></category>
-  <title>Warp Volume</title>
+  <category>Diffusion</category>
+  <title>Warp DWI</title>
 
 <description>
 </description>
@@ -11,7 +11,6 @@
   <contributor></contributor>
 <acknowledgements>
 </acknowledgements>
-
 
 <parameters>
     <label>Input/Output</label>
@@ -37,20 +36,17 @@
        <longflag>--output</longflag>
        <description>Resampled and/or warped image</description>
     </image>
-    <boolean>                                                                                                                                                                                                                              
-      <name>resample</name>
-      <label>Resample DWI at canonical gradient directions?</label>
-      <longflag>--resample</longflag>
-      <description>Resamples the DWI to have a set of canonical gradient directions</description>
-      <default>false</default>
-    </boolean>
-   <boolean>                                                                                                                                                                                                                              
-      <name>resample_self</name>
-      <label>Resample DWI at its original gradient directions?</label>
-      <longflag>--resample_self</longflag>
-      <description>Resamples the DWI at original gradient directions</description>
-      <default>false</default>
-    </boolean>
+
+    <string-enumeration>
+       <name>resample</name>
+       <longflag>--resample</longflag>
+       <description>Resample at either a set of canonical directions or the original gradient directions</description>
+       <label>Resample At:</label>
+       <default>canonical</default>
+       <element>canonical</element>
+       <element>original</element>
+     </string-enumeration>   
+
    <boolean>                                                                                                                                                                                                                              
       <name>without_baselines</name>
       <label>Save output image without the baselines?</label>

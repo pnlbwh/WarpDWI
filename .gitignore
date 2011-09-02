@@ -8,5 +8,5 @@ CMakeFiles
 *.so
 *.cmake
 *CLP.h
-WarpVolume
+WarpDWI
 *.pgm
