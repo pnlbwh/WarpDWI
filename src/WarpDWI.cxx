@@ -672,6 +672,7 @@ int Warp( parameters &args )
   SeparateImages< PixelType >( imageReader->GetOutput() , vectorImage ) ;
 
   /* warp the image */
+  std::cout << "Warping the image..." << std::endl;
   typename WarperType::Pointer   warper = WarperType::New();
   warper->SetDeformationField( fieldReader->GetOutput() );
   for( ::size_t i = 0; i < vectorImage.size(); i++ )

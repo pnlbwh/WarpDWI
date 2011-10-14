@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <executable>
-  <category>Diffusion</category>
+  <category>Diffusion.Create DWI Atlas</category>
   <title>Warp DWI</title>
 
 <description>
