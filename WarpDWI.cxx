@@ -326,15 +326,11 @@ void PrintDictionary(itk::MetaDataDictionary& dico)
   std::vector<std::string>::const_iterator itKey = imgMetaKeys.begin();
   std::string metaString;
 
-  std::cout << "=====================================================================" << std::endl;
-  std::cout << "The input image's dictionary header" << std::endl;
-  std::cout << "=====================================================================" << std::endl;
   for (; itKey != imgMetaKeys.end(); itKey ++)
   {
     itk::ExposeMetaData<std::string> (dico, *itKey, metaString);
     std::cout << *itKey << " ---> " << metaString << std::endl;
   }
-  std::cout << "=====================================================================" << std::endl;
 }
 
 header_struct GetGradients(itk::MetaDataDictionary& imgMetaDictionary)
@@ -403,6 +399,49 @@ header_struct GetGradients(itk::MetaDataDictionary& imgMetaDictionary)
   hdr.numberOfBaselineImages = numberOfImages - numberOfGradientImages;
   return hdr;
 }
+
+itk::Matrix< double , 3 , 3 >
+ReadMeasurementFrame( itk::MetaDataDictionary &dico)
+{
+   itk::Matrix< double , 3 , 3 > measurementFrame ;
+   typedef std::vector< std::vector< double > > DoubleVectorType ;
+   typedef itk::MetaDataObject< DoubleVectorType > MetaDataDoubleVectorType ;
+   itk::MetaDataDictionary::ConstIterator itr = dico.Begin() ;
+   itk::MetaDataDictionary::ConstIterator end = dico.End() ;
+   //We look for the measurement frame in the metadatadictionary
+   while( itr != end )
+   {
+      itk::MetaDataObjectBase::Pointer entry = itr->second ;
+      MetaDataDoubleVectorType::Pointer entryvalue
+            = dynamic_cast< MetaDataDoubleVectorType* >( entry.GetPointer() ) ;
+      if( entryvalue )
+      {
+         int pos = itr->first.find( "NRRD_measurement frame" ) ;
+         if( pos != -1 )
+         {
+            DoubleVectorType tagvalue = entryvalue->GetMetaDataObjectValue() ;
+            for( int i = 0 ; i < 3 ; i++ )
+            {
+               for( int j = 0 ; j < 3 ; j++ )
+               {
+               //we copy the measurement frame
+                  measurementFrame[ i ][ j ] = tagvalue.at( j ).at( i ) ;
+                  tagvalue.at(j).at(i) = ( i == j ? 1 : 0 ) ;
+               }
+            }
+            //if the transform is invertible, we set the measurement frame to the identity matrix
+            //because we are going to apply this measurement frame to the gradient vectors before transforming them
+            //if( inverseTransform )
+            //{
+               entryvalue->SetMetaDataObjectValue( tagvalue ) ;
+            //}
+         }
+      }
+      ++itr ;
+   }
+   return measurementFrame ;
+}
+
 
 void UpdateMetaDataDictionary(itk::MetaDataDictionary &new_dico, itk::MetaDataDictionary &dico, vnl_matrix<double> new_gradients, unsigned int numBaselines)
 {
@@ -530,7 +569,11 @@ unsigned int ComputeSH( parameters args )
 
   /* Get the gradients and number of baseline images */
   input_dico = dwiReader->GetOutput()->GetMetaDataDictionary(); //save metadata dictionary
+  std::cout << "=====================================================================" << std::endl;
+  std::cout << "The input image's dictionary header" << std::endl;
+  std::cout << "=====================================================================" << std::endl;
   PrintDictionary(input_dico);
+  std::cout << "=====================================================================" << std::endl;
   header_struct hdr = GetGradients(input_dico);
   MatrixType gradients = hdr.gradients; 
   unsigned int numberOfBaselineImages = hdr.numberOfBaselineImages;
@@ -592,6 +635,24 @@ unsigned int ComputeSH( parameters args )
     UpdateMetaDataDictionary(output_dico, input_dico, vertices, 0);
   else
     UpdateMetaDataDictionary(output_dico, input_dico, vertices, numberOfBaselineImages);
+
+  // for measurement frame
+  std::vector<std::vector<double> > msrFrame(3);
+  for (unsigned int k=0; k < 3; k++) 
+    {
+    msrFrame[k].resize(3);
+    for (unsigned int m=0; m < 3; m++)
+      {
+      msrFrame[k][m] = 0;
+      }
+    msrFrame[k][k] = 1;
+    }
+  itk::EncapsulateMetaData<std::vector<std::vector<double> > > ( output_dico, "NRRD_measurement frame", msrFrame );
+
+  std::cout << "=====================================================================" << std::endl;
+  std::cout << "The output image's dictionary header" << std::endl;
+  std::cout << "=====================================================================" << std::endl;
+  PrintDictionary(output_dico);
 
   /* Create the SH filter */
   typedef itk::SHFilter< VectorImageType > SHFilterType;
